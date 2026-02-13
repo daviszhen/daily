@@ -28,5 +28,12 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
+.idea/
 # .vscode/
+
+# Project specific
+kang/bin/
+kang/server/cmd/server/dist/
+kang/server/logs/
+kang/web/node_modules/
+kang/web/dist/

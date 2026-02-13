@@ -1,0 +1,25 @@
+# 服务配置
+server:
+  port: 9871
+
+# 日志配置
+log:
+  level: "info"
+  file: "logs/server.log"
+  console: true
+  max_size_mb: 100     # 单文件最大 MB，超过自动轮转
+  max_backups: 3       # 保留旧文件数
+  max_age_days: 30     # 旧文件最大保留天数
+
+# MOI 平台
+moi:
+  base_url: "https://freetier-01.cn-hangzhou.cluster.cn-dev.matrixone.tech"
+  api_key: ""
+
+# MatrixOne 数据库
+database:
+  host: "freetier-01.cn-hangzhou.cluster.cn-dev.matrixone.tech"
+  port: 6001
+  user: ""
+  password: ""
+  name: "smart_daily"
