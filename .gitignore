@@ -34,6 +34,8 @@ go.work.sum
 # Project specific
 kang/bin/
 kang/server/cmd/server/dist/
-kang/server/logs/
+kang/logs/
 kang/web/node_modules/
 kang/web/dist/
+kang/.env
+kang/.pid
