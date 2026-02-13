@@ -303,19 +303,25 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
                       <div className="flex space-x-2">
                         {msg.metadata.confirmed ? (
                           <div className="flex-1 text-center text-sm py-2 text-gray-400">已提交</div>
+                        ) : msg.metadata.dismissed ? (
+                          <div className="flex-1 text-center text-sm py-2 text-gray-400">已取消</div>
                         ) : (
                           <>
                             <button onClick={() => {
                               setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, metadata: { ...m.metadata, confirmed: true } } : m));
                               handleSend('确认提交');
                             }} className="flex-1 bg-gray-900 text-white text-sm py-2 rounded-lg hover:bg-black transition-colors">
-                              确认提交
+                              提交
                             </button>
                             <button onClick={() => {
-                              setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, metadata: { ...m.metadata, confirmed: true } } : m));
                               handleEdit(msg.metadata.summary, msg.metadata.supplementDate);
                             }} className="flex-1 bg-white border border-gray-200 text-gray-700 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors">
                               编辑
+                            </button>
+                            <button onClick={() => {
+                              setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, metadata: { ...m.metadata, dismissed: true } } : m));
+                            }} className="flex-1 bg-white border border-gray-200 text-gray-400 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors">
+                              取消
                             </button>
                           </>
                         )}
