@@ -1,10 +1,17 @@
 package model
 
 type ChatRequest struct {
-	Text   string `json:"text"`
-	Mode   string `json:"mode"`
-	Date   string `json:"date"`
-	Action string `json:"action"`
+	Text      string        `json:"text"`
+	Mode      string        `json:"mode"`
+	Date      string        `json:"date"`
+	Action    string        `json:"action"`
+	SessionID *int64        `json:"session_id,omitempty"`
+	History   []HistoryItem `json:"history,omitempty"`
+}
+
+type HistoryItem struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 type ChatResponse struct {

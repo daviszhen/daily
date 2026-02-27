@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, MessageSquare, PieChart, Menu, X, Bell, UploadCloud, FileUp, CheckCircle2, LogOut } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, PieChart, Menu, X, Bell, UploadCloud, FileUp, CheckCircle2, LogOut, Trash2 } from 'lucide-react';
 import { ViewMode, User } from '../types';
-import { MO_LOGO, logout } from '../services/apiService';
+import { MO_LOGO, logout, SessionInfo } from '../services/apiService';
 
 interface LayoutProps {
   children: React.ReactNode;
   currentView: ViewMode;
   onChangeView: (view: ViewMode) => void;
   user: User;
+  sessions: SessionInfo[];
+  activeSessionId: number | null;
+  onNewChat: () => void;
+  onSelectSession: (id: number) => void;
+  onDeleteSession: (id: number) => void;
 }
 
-export function Layout({ children, currentView, onChangeView, user }: LayoutProps): React.ReactElement {
+export function Layout({ children, currentView, onChangeView, user, sessions, activeSessionId, onNewChat, onSelectSession, onDeleteSession }: LayoutProps): React.ReactElement {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
@@ -59,11 +64,30 @@ export function Layout({ children, currentView, onChangeView, user }: LayoutProp
           <span className="font-semibold text-lg tracking-tight text-gray-900">MOI 智能日报</span>
         </div>
 
-        <div className="flex-1 px-4 py-6 space-y-2">
+        <div className="flex-1 px-4 py-6 space-y-2 overflow-hidden flex flex-col">
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 mb-4">菜单</div>
-          <NavItem icon={MessageSquare} label="AI 助手" active={currentView === 'chat'} onClick={() => { onChangeView('chat'); setIsMobileMenuOpen(false); }} />
+          <NavItem icon={MessageSquare} label="AI 助手" active={currentView === 'chat'} onClick={() => { onNewChat(); setIsMobileMenuOpen(false); }} />
           <NavItem icon={LayoutDashboard} label="团队动态" active={currentView === 'feed'} onClick={() => { onChangeView('feed'); setIsMobileMenuOpen(false); }} />
           <NavItem icon={PieChart} label="数据洞察" active={currentView === 'stats'} onClick={() => { onChangeView('stats'); setIsMobileMenuOpen(false); }} />
+
+          {currentView === 'chat' && sessions.length > 0 && (
+            <div className="mt-4 flex-1 min-h-0 flex flex-col">
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 mb-2">对话历史</div>
+              <div className="flex-1 overflow-y-auto space-y-1 px-2">
+                {sessions.map(s => (
+                  <div key={s.id} className={`group flex items-center px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-colors ${s.id === activeSessionId ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+                    onClick={() => onSelectSession(s.id)}>
+                    <MessageSquare size={15} className="mr-2.5 flex-shrink-0 text-gray-400" />
+                    <span className="flex-1 truncate">{s.title || '未命名对话'}</span>
+                    <button className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity"
+                      onClick={e => { e.stopPropagation(); onDeleteSession(s.id); }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-gray-50">

@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, Sparkles, FileText, Search, Calendar, FileDown, X, ChevronDown, ChevronRight, Brain, Clock } from 'lucide-react';
 import { Message, User } from '../types';
-import { processUserMessage, MO_LOGO } from '../services/apiService';
+import { processUserMessage, MO_LOGO, createSession, loadSessionMessages } from '../services/apiService';
 
 type ChatMode = 'report' | 'query' | 'summary' | 'supplement' | null;
 
 interface ChatInterfaceProps {
   user: User;
   onReportSubmitted: () => void;
+  sessionId: number | null;
+  onSessionCreated: (id: number) => void;
 }
 
 // Simple markdown renderer for query results
@@ -79,7 +81,7 @@ function formatElapsed(ms: number): string {
   return `${Math.floor(sec / 60)}分${sec % 60}秒`;
 }
 
-export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): React.ReactElement {
+export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCreated }: ChatInterfaceProps): React.ReactElement {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [thinkingSteps, setThinkingSteps] = useState<string[]>([]);
@@ -101,6 +103,20 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, thinkingSteps]);
 
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const maxH = 128;
+    if (el.scrollHeight > maxH) {
+      el.style.height = maxH + 'px';
+      el.style.overflowY = 'auto';
+    } else {
+      el.style.height = el.scrollHeight + 'px';
+      el.style.overflowY = 'hidden';
+    }
+  }, [input]);
+
   // Thinking elapsed timer
   useEffect(() => {
     if (!thinkingStartTime || !isLoading) return;
@@ -112,6 +128,21 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
     if (activeMode !== 'supplement') setSelectedDate(null);
   }, [activeMode]);
 
+  // Load messages when switching sessions
+  useEffect(() => {
+    if (!sessionId) {
+      setMessages([{
+        id: 'welcome', role: 'assistant',
+        content: `你好，${user.name}。我是你的 AI 日报助手。请选择下方的功能按钮。`,
+        timestamp: new Date(),
+      }]);
+      return;
+    }
+    loadSessionMessages(sessionId).then(msgs => {
+      if (msgs.length > 0) setMessages(msgs);
+    }).catch(() => {});
+  }, [sessionId]);
+
   function isConfirmation(text: string): boolean {
     const t = text.toLowerCase().trim();
     return t === '确认' || t === '是' || t === 'ok' || t.includes('确认提交') || t.includes('confirm');
@@ -119,18 +150,39 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
 
   async function handleSend(text: string = input): Promise<void> {
     if (!text.trim()) return;
+    const isConfirm = ['确认', '是', 'ok', '确认提交', 'confirm'].includes(text.trim().toLowerCase());
+
+    // 用户主动发新消息时，自动关闭旧的未操作确认卡片
+    if (!isConfirm) {
+      setMessages(prev => prev.map(m =>
+        m.type === 'summary_confirm' && m.metadata && !m.metadata.confirmed && !m.metadata.dismissed && !m.metadata.edited
+          ? { ...m, metadata: { ...m.metadata, dismissed: true } } : m
+      ));
+    }
+
+    // Ensure session exists (lazy create on first message)
+    let sid = sessionId;
+    if (!sid) {
+      try {
+        const sess = await createSession(new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//g, '-'));
+        sid = sess.id;
+        onSessionCreated(sid);
+      } catch (e) {
+        console.error('create session failed', e);
+      }
+    }
 
     const userMsg: Message = {
       id: Date.now().toString(), role: 'user', content: text, timestamp: new Date(),
       metadata: selectedDate ? { supplementDate: selectedDate } : undefined,
     };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages(prev => [...prev.filter(m => m.id !== 'welcome'), userMsg]);
     setInput('');
     setIsLoading(true);
 
     try {
       if (isConfirmation(text)) {
-        const response = await processUserMessage(text, messages, { mode: activeMode, date: selectedDate });
+        const response = await processUserMessage(text, messages, { mode: activeMode, date: selectedDate, sessionId: sid });
         setMessages(prev => [...prev, response]);
         onReportSubmitted();
         setActiveMode(null);
@@ -147,7 +199,7 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
       setThinkingElapsed(0);
 
       const thinkStart = Date.now();
-      const response = await processUserMessage(text, messages, { mode: activeMode, date: selectedDate }, {
+      const response = await processUserMessage(text, messages, { mode: activeMode, date: selectedDate, sessionId: sid }, {
         onToken(token) {
           setThinkingCollapsed(true);
           setMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: m.content + token } : m));
@@ -201,7 +253,6 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
 
   function toggleMode(mode: ChatMode): void {
     setActiveMode(activeMode === mode ? null : mode);
-    if (activeMode !== mode) setInput('');
   }
 
   function getPlaceholder(): string {
@@ -220,6 +271,92 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
     return d.toISOString().split('T')[0];
   }
 
+  const isEmpty = messages.length <= 1 && messages[0]?.id === 'welcome';
+
+  // Shared input area (used in both layouts)
+  const inputArea = (
+    <>
+      <div className="flex flex-wrap gap-2 mb-3 px-1">
+        <ModeButton mode="report" label="汇报今日工作" icon={FileText} active={activeMode === 'report'} disabled={isLoading} onToggle={() => toggleMode('report')} />
+        <ModeButton mode="supplement" label="补填往期日报" icon={Calendar} active={activeMode === 'supplement'} disabled={isLoading} onToggle={() => toggleMode('supplement')} />
+        <ModeButton mode="query" label="查询团队动态" icon={Search} active={activeMode === 'query'} disabled={isLoading} onToggle={() => toggleMode('query')} />
+        <ModeButton mode="summary" label="生成周报总结" icon={Sparkles} active={activeMode === 'summary'} disabled={isLoading} onToggle={() => toggleMode('summary')} />
+      </div>
+
+      <div className="relative flex flex-col bg-white border border-gray-200 rounded-2xl shadow-sm focus-within:border-gray-400 transition-colors">
+        {activeMode === 'supplement' && selectedDate && (
+          <div className="px-3 pt-3 flex">
+            <div className="flex items-center bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded-md border border-gray-200 animate-fade-in">
+              <Calendar size={12} className="mr-1.5" />
+              <span>补填: {selectedDate}</span>
+              <button onClick={() => setSelectedDate(null)} className="ml-2 hover:bg-gray-200 rounded p-0.5 transition-colors">
+                <X size={12} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-end w-full">
+          <div className="flex items-center pb-2 pl-2">
+            {activeMode === 'supplement' && (
+              <div className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors group">
+                <Calendar size={20} className={`cursor-pointer ${selectedDate ? 'text-gray-900' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                <input
+                  type="date" max={getYesterdayDate()}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  style={{ outline: 'none' }}
+                  onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+                  title="选择补填日期"
+                />
+              </div>
+            )}
+          </div>
+
+          <textarea
+            ref={inputRef} value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              const isMobile = 'ontouchstart' in window;
+              if (e.key === 'Enter' && !e.shiftKey && !isMobile) { e.preventDefault(); handleSend(); }
+            }}
+            placeholder={getPlaceholder()}
+            style={{ outline: 'none', boxShadow: 'none' }}
+            className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3 px-3 text-gray-900 placeholder-gray-400 min-h-[48px] max-h-32"
+            rows={1}
+          />
+
+          <button
+            onClick={() => handleSend()}
+            disabled={!input.trim() || isLoading}
+            className={`p-2 m-1.5 rounded-xl transition-all flex-shrink-0 ${
+              input.trim() && !isLoading
+                ? 'bg-gray-900 text-white hover:bg-black shadow-md'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            <Send size={18} />
+          </button>
+        </div>
+      </div>
+      <p className="text-center text-xs text-gray-400 mt-2">AI 生成内容可能存在误差，重要信息请核对。</p>
+    </>
+  );
+
+  // Empty state: centered layout
+  if (isEmpty) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto w-full px-4">
+        <div className="mb-2">
+          <img src={MO_LOGO} alt="MOI" className="w-12 h-12 object-contain" />
+        </div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-1">你好，{user.name}</h2>
+        <p className="text-gray-400 text-sm mb-8">选择功能开始，或直接输入工作内容</p>
+        <div className="w-full">{inputArea}</div>
+      </div>
+    );
+  }
+
+  // Chat state: normal layout
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto w-full">
       {/* Messages */}
@@ -237,6 +374,7 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
                 )}
 
                 <div className={`space-y-2 ${isUser ? 'text-right' : 'text-left'}`}>
+                  {msg.type !== 'summary_confirm' && (
                   <div className={`px-5 py-3 rounded-2xl text-base leading-relaxed shadow-sm ${
                     isUser ? 'bg-gray-900 text-white rounded-tr-sm' : 'bg-white border border-gray-100 text-gray-800 rounded-tl-sm'
                   }`}>
@@ -250,9 +388,9 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
                     {(() => {
                       const steps = msg.metadata?.thinkingSteps as string[] | undefined;
                       if (!steps?.length) return null;
-                      const elapsed = msg.metadata?.thinkingElapsed as number | undefined;
                       const done = msg.metadata?.thinkingDone as boolean | undefined;
-                      const collapsed = done || thinkingCollapsed;
+                      const elapsed = (isLoading && !done) ? thinkingElapsed : msg.metadata?.thinkingElapsed as number | undefined;
+                      const collapsed = thinkingCollapsed;
                       return (
                         <div className="mb-2">
                           <button
@@ -284,6 +422,7 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
                       : <MarkdownContent text={msg.content} />
                     }
                   </div>
+                  )}
 
                   {/* Summary confirmation card */}
                   {msg.type === 'summary_confirm' && msg.metadata && (
@@ -292,7 +431,7 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
                         {msg.metadata.isSupplement ? '补交预览' : '日报预览'}
                         {msg.metadata.supplementDate && <span className="ml-2 font-normal text-gray-400">({msg.metadata.supplementDate})</span>}
                       </h4>
-                      <div className="text-sm text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3">
+                      <div className="text-sm text-gray-800 bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3 whitespace-pre-line">
                         {msg.metadata.summary}
                       </div>
                       {msg.metadata.risks?.length > 0 && (
@@ -300,27 +439,30 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
                           <span className="text-xs font-medium text-red-500 bg-red-50 px-2 py-1 rounded">检测到风险</span>
                         </div>
                       )}
-                      <div className="flex space-x-2">
+                      <div className="flex space-x-2 w-64">
                         {msg.metadata.confirmed ? (
                           <div className="flex-1 text-center text-sm py-2 text-gray-400">已提交</div>
                         ) : msg.metadata.dismissed ? (
                           <div className="flex-1 text-center text-sm py-2 text-gray-400">已取消</div>
+                        ) : msg.metadata.edited ? (
+                          <div className="flex-1 text-center text-sm py-2 text-gray-400">已编辑</div>
                         ) : (
                           <>
                             <button onClick={() => {
                               setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, metadata: { ...m.metadata, confirmed: true } } : m));
                               handleSend('确认提交');
-                            }} className="flex-1 bg-gray-900 text-white text-sm py-2 rounded-lg hover:bg-black transition-colors">
+                            }} className="w-20 bg-gray-900 text-white text-sm py-2 rounded-lg hover:bg-black transition-colors">
                               提交
                             </button>
                             <button onClick={() => {
+                              setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, metadata: { ...m.metadata, edited: true } } : m));
                               handleEdit(msg.metadata.summary, msg.metadata.supplementDate);
-                            }} className="flex-1 bg-white border border-gray-200 text-gray-700 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors">
+                            }} className="w-20 bg-white border border-gray-200 text-gray-700 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors">
                               编辑
                             </button>
                             <button onClick={() => {
                               setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, metadata: { ...m.metadata, dismissed: true } } : m));
-                            }} className="flex-1 bg-white border border-gray-200 text-gray-400 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors">
+                            }} className="w-20 bg-white border border-gray-200 text-gray-500 text-sm py-2 rounded-lg hover:bg-gray-50 transition-colors">
                               取消
                             </button>
                           </>
@@ -367,83 +509,9 @@ export function ChatInterface({ user, onReportSubmitted }: ChatInterfaceProps): 
 
       {/* Input area */}
       <div className="p-4 bg-white border-t border-gray-100">
-        <div className="max-w-4xl mx-auto flex flex-wrap gap-2 mb-3 px-1">
-          <ModeButton mode="report" label="汇报今日工作" icon={FileText} active={activeMode === 'report'} disabled={isLoading} onToggle={() => toggleMode('report')} />
-          <ModeButton mode="supplement" label="补填往期日报" icon={Calendar} active={activeMode === 'supplement'} disabled={isLoading} onToggle={() => toggleMode('supplement')} />
-          <ModeButton mode="query" label="查询团队动态" icon={Search} active={activeMode === 'query'} disabled={isLoading} onToggle={() => toggleMode('query')} />
-          <ModeButton mode="summary" label="生成周报总结" icon={Sparkles} active={activeMode === 'summary'} disabled={isLoading} onToggle={() => toggleMode('summary')} />
+        <div className="max-w-4xl mx-auto">
+          {inputArea}
         </div>
-
-        <div className="max-w-4xl mx-auto relative flex flex-col bg-white border border-gray-200 rounded-2xl shadow-sm focus-within:border-gray-400 transition-colors">
-          {activeMode === 'supplement' && selectedDate && (
-            <div className="px-3 pt-3 flex">
-              <div className="flex items-center bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded-md border border-gray-200 animate-fade-in">
-                <Calendar size={12} className="mr-1.5" />
-                <span>补填: {selectedDate}</span>
-                <button onClick={() => setSelectedDate(null)} className="ml-2 hover:bg-gray-200 rounded p-0.5 transition-colors">
-                  <X size={12} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-end w-full">
-            <div className="flex items-center pb-2 pl-2">
-              {activeMode === 'supplement' && (
-                <div className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors group">
-                  <Calendar size={20} className={`cursor-pointer ${selectedDate ? 'text-gray-900' : 'text-gray-400 group-hover:text-gray-600'}`} />
-                  <input
-                    type="date" max={getYesterdayDate()}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    style={{ outline: 'none' }}
-                    onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-                    title="选择补填日期"
-                  />
-                </div>
-              )}
-            </div>
-
-            <textarea
-              ref={inputRef} value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                const el = e.target;
-                el.style.height = 'auto';
-                const maxH = 128;
-                if (el.scrollHeight > maxH) {
-                  el.style.height = maxH + 'px';
-                  el.style.overflow = 'auto';
-                } else {
-                  el.style.height = el.scrollHeight + 'px';
-                  el.style.overflow = 'hidden';
-                }
-              }}
-              onKeyDown={(e) => {
-                // Desktop only: Enter sends, Shift+Enter newline
-                // Mobile: Enter always newline (use send button)
-                const isMobile = 'ontouchstart' in window;
-                if (e.key === 'Enter' && !e.shiftKey && !isMobile) { e.preventDefault(); handleSend(); }
-              }}
-              placeholder={getPlaceholder()}
-              style={{ outline: 'none', boxShadow: 'none' }}
-              className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3 px-3 text-gray-900 placeholder-gray-400 min-h-[48px] max-h-32"
-              rows={1}
-            />
-
-            <button
-              onClick={() => handleSend()}
-              disabled={!input.trim() || isLoading}
-              className={`p-2 m-1.5 rounded-xl transition-all flex-shrink-0 ${
-                input.trim() && !isLoading
-                  ? 'bg-gray-900 text-white hover:bg-black shadow-md'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              <Send size={18} />
-            </button>
-          </div>
-        </div>
-        <p className="text-center text-xs text-gray-400 mt-2">AI 生成内容可能存在误差，重要信息请核对。</p>
       </div>
     </div>
   );

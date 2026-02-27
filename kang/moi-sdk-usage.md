@@ -289,8 +289,10 @@ SDK 分两层：`RawClient`（底层，一对一映射 API）和 `SDKClient`（�
 |----------|----------|------|
 | LLM Chat Completions | 手动 HTTP 调 `/llm-proxy/v1/chat/completions`（SDK 没封装这个） | ✅ 核心能力 |
 | LLM Streaming | 同上 `stream: true` | ✅ 所有 AI 输出 |
+| LLM 意图分类 | 用 qwen-turbo 快速分类（chat/query），绕过 Data Asking 对闲聊的无效推理 | ✅ 直调 llm-proxy |
 | MatrixOne 数据库 | `mysql.NewConnector` 直连 | ✅ 稳定 |
 | Catalog 注册 | `CreateCatalog / CreateDatabase / CreateTable` | ✅ 注册成功 |
+| NL2SQL Knowledge | `CreateKnowledge` 注入术语、同义词、业务逻辑、问答样例 | ✅ 17 条已注入 |
 
 ### 3.2 试了但有问题 ⚠️
 
@@ -304,7 +306,6 @@ SDK 分两层：`RawClient`（底层，一对一映射 API）和 `SDKClient`（�
 | MOI 能力 | 可以干什么 |
 |----------|-----------|
 | LLM Session 管理 | 保存对话历史，替代我们内存中的 pending 状态 |
-| NL2SQL Knowledge | 教 NL2SQL 认识我们的表，提升查询准确率 |
 | ImportLocalFileToTable | 把文件导入 Catalog 表，让 Data Asking 能查到数据 |
 | Volume + File | 存储用户上传的 xlsx 和生成的周报 .md |
 | GenAI 工作流 | 上传 PDF 日报自动解析提取 |

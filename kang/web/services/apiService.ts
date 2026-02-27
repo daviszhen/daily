@@ -66,10 +66,10 @@ interface StreamCallbacks {
 export async function processUserMessage(
   text: string,
   history: Message[],
-  options?: { mode?: string | null; date?: string | null },
+  options?: { mode?: string | null; date?: string | null; sessionId?: number | null },
   callbacks?: StreamCallbacks,
 ): Promise<Message> {
-  const { mode, date } = options || {};
+  const { mode, date, sessionId } = options || {};
   const { onToken, onResult, onThinking } = callbacks || {};
 
   const lowerText = text.toLowerCase().trim();
@@ -80,7 +80,7 @@ export async function processUserMessage(
   if (isConfirmation) {
     const res = await apiFetch('/api/chat', {
       method: 'POST',
-      body: JSON.stringify({ action: 'confirm' }),
+      body: JSON.stringify({ action: 'confirm', session_id: sessionId }),
     });
     const data = await res.json();
     return {
@@ -93,6 +93,13 @@ export async function processUserMessage(
   const body: Record<string, any> = { text };
   if (mode) body.mode = mode;
   if (date) body.date = date;
+  if (sessionId) body.session_id = sessionId;
+
+  // 发送最近对话历史（最多 10 条）
+  const recent = history.filter(m => m.role === 'user' || m.role === 'assistant').slice(-10);
+  if (recent.length > 0) {
+    body.history = recent.map(m => ({ role: m.role, content: m.content }));
+  }
 
   const res = await apiFetch('/api/chat/stream', {
     method: 'POST',
@@ -150,6 +157,46 @@ export async function processUserMessage(
     type: 'text', timestamp: new Date(), metadata,
   };
 }
+
+// ============ Sessions ============
+
+export type SessionInfo = { id: number; title: string; created_at: number; updated_at: number };
+
+export async function createSession(title: string): Promise<SessionInfo> {
+  const res = await apiFetch('/api/sessions', { method: 'POST', body: JSON.stringify({ title }) });
+  return res.json();
+}
+
+export async function listSessions(): Promise<SessionInfo[]> {
+  const res = await apiFetch('/api/sessions');
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
+
+export async function deleteSession(id: number): Promise<void> {
+  await apiFetch(`/api/sessions/${id}`, { method: 'DELETE' });
+}
+
+export async function loadSessionMessages(sessionId: number): Promise<Message[]> {
+  const res = await apiFetch(`/api/sessions/${sessionId}/messages`);
+  const raw: any[] = await res.json();
+  const messages: Message[] = [];
+  for (const m of raw) {
+    const config = m.config ? tryParse(m.config) : {};
+    if (m.role === 'user') {
+      messages.push({ id: String(m.id), role: 'user', content: m.content, timestamp: new Date(m.created_at * 1000) });
+    } else {
+      messages.push({
+        id: String(m.id), role: 'assistant', content: m.content || m.response || '',
+        type: config.type || 'text', timestamp: new Date(m.created_at * 1000),
+        metadata: { ...config, thinkingDone: true },
+      });
+    }
+  }
+  return messages;
+}
+
+function tryParse(s: string): any { try { return JSON.parse(s); } catch { return {}; } }
 
 // ============ Feed ============
 

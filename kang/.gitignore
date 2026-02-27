@@ -1,0 +1,4 @@
+bin/
+logs/
+.env
+node_modules/

@@ -5,9 +5,9 @@ dev:
 	@lsof -ti:9871 | xargs kill -9 2>/dev/null; lsof -ti:9872 | xargs kill -9 2>/dev/null; sleep 1
 	@echo "Starting backend :9871 + frontend :9872..."
 	@mkdir -p logs
-	@nohup go run ./server/cmd/server/ --config server/etc/config-dev.yaml > /dev/null 2>&1 &
+	@cd server && nohup go run ./cmd/server/ --config etc/config-dev.yaml > /dev/null 2>&1 &
 	@cd web && nohup npm run dev > ../logs/frontend.log 2>&1 &
-	@sleep 3; if lsof -ti:9871 > /dev/null 2>&1; then echo "✅ Backend :9871 OK"; else echo "❌ Backend failed, check logs/backend.log"; fi
+	@sleep 3; if lsof -ti:9871 > /dev/null 2>&1; then echo "✅ Backend :9871 OK"; else echo "⏳ Waiting..."; sleep 5; if lsof -ti:9871 > /dev/null 2>&1; then echo "✅ Backend :9871 OK"; else echo "❌ Backend failed, check logs/backend.log"; fi; fi
 	@if lsof -ti:9872 > /dev/null 2>&1; then echo "✅ Frontend :9872 OK"; else echo "❌ Frontend failed, check logs/frontend.log"; fi
 
 # Local dev: stop
@@ -27,7 +27,7 @@ run: build
 	@lsof -ti:9871 | xargs kill -9 2>/dev/null; sleep 1
 	@mkdir -p logs
 	@set -a; [ -f .env ] && . .env; set +a; nohup ./bin/smart-daily --config server/etc/config-dev.yaml > /dev/null 2>&1 & echo $$! > .pid
-	@sleep 2; if lsof -ti:9871 > /dev/null 2>&1; then echo "✅ Running on :9871 (pid: $$(cat .pid))"; else echo "❌ Failed to start, check logs/backend.log"; cat .pid | xargs kill 2>/dev/null; rm -f .pid; exit 1; fi
+	@sleep 2; if lsof -ti:9871 > /dev/null 2>&1; then echo "✅ Running on :9871 (pid: $$(cat .pid))"; else echo "⏳ Waiting..."; sleep 5; if lsof -ti:9871 > /dev/null 2>&1; then echo "✅ Running on :9871 (pid: $$(cat .pid))"; else echo "❌ Failed to start, check logs/backend.log"; fi; fi
 
 # Stop binary
 run-stop:
@@ -39,7 +39,7 @@ run-stop:
 docker:
 	docker build -t smart-daily .
 
-deploy:
+deploy: build
 	docker compose up -d --build
 	@echo "✅ Running on :9871"
 

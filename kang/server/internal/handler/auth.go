@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"log/slog"
 	"net/http"
+	"smart-daily/internal/logger"
 	"smart-daily/internal/middleware"
 	"smart-daily/internal/model"
 	"smart-daily/internal/service"
@@ -25,12 +25,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	m, err := h.auth.Login(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
-		slog.Warn("login.failed", "username", req.Username)
+		logger.Warn("login.failed", "username", req.Username)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	slog.Info("login.ok", "uid", m.ID, "name", m.Name)
+	logger.Info("login.ok", "uid", m.ID, "name", m.Name)
 
 	token, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"uid":  m.ID,

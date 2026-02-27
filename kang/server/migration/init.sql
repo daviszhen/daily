@@ -41,3 +41,16 @@ INSERT INTO members (username, password, name, role) VALUES
 ('zhaogangyi',  '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '赵刚毅', '开发工程师'),
 ('lifangfei',   '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '李芳菲', '开发工程师'),
 ('kuaiweikang', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '蒯伟康', '开发工程师');
+
+-- 测试账号 密码都是 123456
+INSERT INTO members (username, password, name, role) VALUES
+('test01', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '测试01', '测试'),
+('test02', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '测试02', '测试'),
+('test03', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '测试03', '测试'),
+('test04', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '测试04', '测试'),
+('test05', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '测试05', '测试'),
+('test06', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '测试06', '测试'),
+('test07', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '测试07', '测试'),
+('test08', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '测试08', '测试'),
+('test09', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '测试09', '测试'),
+('test10', '$2a$10$sH3qZ9F0SIrCWpcOi9oWDO6EjbWMRs4X/8d35hphzkYRRM.ESRsa.', '测试10', '测试');

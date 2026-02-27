@@ -4,12 +4,11 @@ import (
 	"embed"
 	"flag"
 	"io/fs"
-	"log/slog"
 	"net/http"
 	"os"
 	"smart-daily/internal/config"
 	"smart-daily/internal/handler"
-	applog "smart-daily/internal/log"
+	"smart-daily/internal/logger"
 	"smart-daily/internal/middleware"
 	"smart-daily/internal/service"
 
@@ -25,30 +24,41 @@ func main() {
 	flag.Parse()
 
 	cfg := config.Load(*configFile)
-	applog.Init(cfg.Log)
+	logger.Init(cfg.Log)
 	db, err := cfg.OpenGormDB()
 	if err != nil {
-		slog.Error("db connect failed", "err", err)
+		logger.Error("db connect failed", "err", err)
 		os.Exit(1)
 	}
 
 	raw, err := cfg.NewRawClient()
 	if err != nil {
-		slog.Warn("sdk client init failed", "err", err)
+		logger.Warn("sdk client init failed", "err", err)
 	}
 
 	var catalogSync *service.CatalogSync
 	if raw != nil {
-		catalogSync = service.NewCatalogSync(raw)
-		slog.Info("catalog sync enabled")
+		catalogSync = service.NewCatalogSync(raw, cfg.MOI.CatalogID, cfg.Database.Name)
 	}
 
-	aiSvc := service.NewAIService(cfg.MOI.BaseURL, cfg.MOI.APIKey, raw)
+	aiSvc := service.NewAIService(cfg.MOI.BaseURL, cfg.MOI.APIKey, cfg.MOI.Model, cfg.MOI.FastModel, cfg.Database.Name, raw)
+	if catalogSync != nil && catalogSync.Ready() {
+		aiSvc.SetCatalogDBID(catalogSync.DatabaseID())
+	}
 	dailySvc := service.NewDailyService(db)
 	authSvc := service.NewAuthService(db)
 
+	// Sync members to Catalog at startup
+	if catalogSync != nil && catalogSync.Ready() {
+		go catalogSync.SyncAllMembers(db)
+	}
+
 	chatH := handler.NewChatHandler(aiSvc, dailySvc, catalogSync)
 	authH := handler.NewAuthHandler(authSvc)
+	sessionSvc := service.NewSessionService(cfg.MOI.BaseURL, cfg.MOI.APIKey)
+	sessionH := handler.NewSessionHandler(sessionSvc)
+
+	chatH.SetSessionService(sessionSvc)
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -63,12 +73,16 @@ func main() {
 	api.POST("/chat", chatH.Chat)
 	api.POST("/chat/stream", chatH.ChatStream)
 	api.GET("/files/:name", chatH.DownloadFile)
+	api.POST("/sessions", sessionH.Create)
+	api.GET("/sessions", sessionH.List)
+	api.DELETE("/sessions/:id", sessionH.Delete)
+	api.GET("/sessions/:id/messages", sessionH.Messages)
 
 	distFS, _ := fs.Sub(staticFS, "dist")
 	r.NoRoute(gin.WrapH(http.FileServer(http.FS(distFS))))
 
-	slog.Info("server starting", "addr", cfg.Addr())
+	logger.Info("server starting", "addr", cfg.Addr())
 	if err := r.Run(cfg.Addr()); err != nil {
-		slog.Error("server failed", "err", err)
+		logger.Error("server failed", "err", err)
 	}
 }

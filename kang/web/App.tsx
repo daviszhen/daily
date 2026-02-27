@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { ChatInterface } from './components/ChatInterface';
 import { DailyFeed } from './components/DailyFeed';
 import { Stats } from './components/Stats';
 import { ViewMode, User } from './types';
-import { getCurrentUser, isLoggedIn, login } from './services/apiService';
+import { getCurrentUser, isLoggedIn, login, listSessions, deleteSession, SessionInfo } from './services/apiService';
 
 function LoginPage({ onLogin }: { onLogin: (user: User) => void }): React.ReactElement {
   const [username, setUsername] = useState('');
@@ -54,6 +54,37 @@ export default function App(): React.ReactElement {
   const [currentView, setCurrentView] = useState<ViewMode>('chat');
   const [loggedIn, setLoggedIn] = useState(isLoggedIn());
   const [user, setUser] = useState<User>(getCurrentUser());
+  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+
+  useEffect(() => {
+    if (loggedIn) refreshSessions();
+  }, [loggedIn]);
+
+  function refreshSessions() {
+    listSessions().then(setSessions).catch(() => {});
+  }
+
+  function handleNewChat() {
+    setSessionId(null);
+    setCurrentView('chat');
+  }
+
+  function handleSelectSession(id: number) {
+    setSessionId(id);
+    setCurrentView('chat');
+  }
+
+  async function handleDeleteSession(id: number) {
+    await deleteSession(id);
+    if (sessionId === id) setSessionId(null);
+    refreshSessions();
+  }
+
+  function handleSessionCreated(id: number) {
+    setSessionId(id);
+    refreshSessions();
+  }
 
   if (!loggedIn) {
     return <LoginPage onLogin={(u) => { setUser(u); setLoggedIn(true); }} />;
@@ -63,12 +94,14 @@ export default function App(): React.ReactElement {
     switch (currentView) {
       case 'feed': return <DailyFeed />;
       case 'stats': return <Stats />;
-      default: return <ChatInterface user={user} onReportSubmitted={() => {}} />;
+      default: return <ChatInterface user={user} onReportSubmitted={() => {}} sessionId={sessionId} onSessionCreated={handleSessionCreated} />;
     }
   }
 
   return (
-    <Layout currentView={currentView} onChangeView={setCurrentView} user={user}>
+    <Layout currentView={currentView} onChangeView={setCurrentView} user={user}
+      sessions={sessions} activeSessionId={sessionId}
+      onNewChat={handleNewChat} onSelectSession={handleSelectSession} onDeleteSession={handleDeleteSession}>
       {renderContent()}
     </Layout>
   );

@@ -35,8 +35,11 @@ type ServerConfig struct {
 }
 
 type MOIConfig struct {
-	BaseURL string `yaml:"base_url"`
-	APIKey  string `yaml:"api_key"`
+	BaseURL   string `yaml:"base_url"`
+	APIKey    string `yaml:"api_key"`
+	CatalogID int64  `yaml:"catalog_id"`
+	Model     string `yaml:"model"`
+	FastModel string `yaml:"fast_model"`
 }
 
 type DatabaseConfig struct {
@@ -50,7 +53,7 @@ type DatabaseConfig struct {
 func Load(configFile string) *Config {
 	c := &Config{
 		Server:   ServerConfig{Port: 9871},
-		MOI:      MOIConfig{BaseURL: "https://freetier-01.cn-hangzhou.cluster.cn-dev.matrixone.tech"},
+		MOI:      MOIConfig{BaseURL: "https://freetier-01.cn-hangzhou.cluster.cn-dev.matrixone.tech", CatalogID: 1, Model: "qwen-plus", FastModel: "qwen-turbo"},
 		Log:      LogConfig{Level: "info", Console: true, MaxSizeMB: 100, MaxBackups: 3, MaxAgeDays: 30},
 		Database: DatabaseConfig{Port: 6001, Name: "smart_daily"},
 	}
@@ -76,6 +79,7 @@ func Load(configFile string) *Config {
 	envOverride(&c.Log.File, "LOG_FILE")
 	envOverrideInt(&c.Server.Port, "PORT")
 	envOverrideInt(&c.Database.Port, "MO_PORT")
+	envOverrideInt64(&c.MOI.CatalogID, "MOI_CATALOG_ID")
 
 	return c
 }
@@ -120,6 +124,14 @@ func envOverride(dst *string, key string) {
 func envOverrideInt(dst *int, key string) {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
+			*dst = n
+		}
+	}
+}
+
+func envOverrideInt64(dst *int64, key string) {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
 			*dst = n
 		}
 	}

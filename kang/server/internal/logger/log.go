@@ -1,4 +1,4 @@
-package log
+package logger
 
 import (
 	"io"
@@ -33,8 +33,13 @@ func Init(cfg config.LogConfig) {
 
 	h := slog.NewJSONHandler(io.MultiWriter(writers...), &slog.HandlerOptions{Level: level})
 	slog.SetDefault(slog.New(h))
-	slog.Info("logger initialized", "level", cfg.Level, "file", cfg.File)
+	Info("logger initialized", "level", cfg.Level, "file", cfg.File)
 }
+
+func Info(msg string, args ...any)  { slog.Info(msg, args...) }
+func Warn(msg string, args ...any)  { slog.Warn(msg, args...) }
+func Error(msg string, args ...any) { slog.Error(msg, args...) }
+func Debug(msg string, args ...any) { slog.Debug(msg, args...) }
 
 func parseLevel(s string) slog.Level {
 	switch strings.ToLower(s) {

@@ -5,7 +5,7 @@ server:
 # 日志配置
 log:
   level: "info"
-  file: "logs/server.log"
+  file: "logs/backend.log"
   console: true
   max_size_mb: 100     # 单文件最大 MB，超过自动轮转
   max_backups: 3       # 保留旧文件数
@@ -14,12 +14,17 @@ log:
 # MOI 平台
 moi:
   base_url: "https://freetier-01.cn-hangzhou.cluster.cn-dev.matrixone.tech"
+#  api_key: "h700BMN2EGLbxogep62asRV14JfmdKdQxTKvbn1y74Veiv84h8Z349C_kOd_iXa-S166k5C__Rj0Oko6"
   api_key: ""
+  catalog_id: 1              # Catalog 目录 ID（"默认" = 1）
+  model: "qwen-plus"         # 主模型（可选：qwen-turbo/qwen-plus/qwen-max/gpt-4-turbo/gpt-3.5-turbo）
+  fast_model: "qwen-turbo"   # 快速模型（意图分类、内容验证）
 
 # MatrixOne 数据库
 database:
   host: "freetier-01.cn-hangzhou.cluster.cn-dev.matrixone.tech"
-  port: 6001
+  port:
   user: ""
+  # user: "root"
   password: ""
   name: "smart_daily"
