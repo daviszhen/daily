@@ -96,7 +96,26 @@ export async function processUserMessage(
   if (sessionId) body.session_id = sessionId;
 
   // 发送最近对话历史（最多 10 条）
-  const recent = history.filter(m => m.role === 'user' || m.role === 'assistant').slice(-10);
+  // 补填模式：只发同日期的消息对，不同日期的工作内容互不干扰
+  // 汇报模式：截断到最后一次提交之后，避免同会话多次提交串内容
+  let filtered = history.filter(m => m.role === 'user' || m.role === 'assistant');
+  if (mode === 'supplement' && date) {
+    const pairs: Message[] = [];
+    for (let i = 0; i < filtered.length; i++) {
+      const m = filtered[i];
+      if (m.role === 'user' && m.metadata?.supplementDate === date) {
+        pairs.push(m);
+        if (i + 1 < filtered.length && filtered[i + 1].role === 'assistant') {
+          pairs.push(filtered[i + 1]);
+        }
+      }
+    }
+    filtered = pairs;
+  } else if (mode === 'report') {
+    const lastSubmitIdx = filtered.map((m, i) => m.role === 'assistant' && m.content.includes('已提交') ? i : -1).filter(i => i >= 0).pop();
+    if (lastSubmitIdx !== undefined) filtered = filtered.slice(lastSubmitIdx + 1);
+  }
+  const recent = filtered.slice(-10);
   if (recent.length > 0) {
     body.history = recent.map(m => ({ role: m.role, content: m.content }));
   }
@@ -182,6 +201,10 @@ export async function loadSessionMessages(sessionId: number): Promise<Message[]>
   const raw: any[] = await res.json();
   const messages: Message[] = [];
   for (const m of raw) {
+    // 过滤 Data Asking 内部消息（system:agent:nl2sql 等）
+    if (m.role && m.role.startsWith('system:')) continue;
+    // 过滤 Data Asking 自动存的 user 消息（带"注：提问者"标记，与我们存的原始消息重复）
+    if (m.role === 'user' && m.content && m.content.includes('（注：提问者是')) continue;
     const config = m.config ? tryParse(m.config) : {};
     if (m.role === 'user') {
       messages.push({ id: String(m.id), role: 'user', content: m.content, timestamp: new Date(m.created_at * 1000) });

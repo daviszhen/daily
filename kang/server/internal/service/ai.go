@@ -257,7 +257,6 @@ func (s *AIService) StreamQueryAnswer(ctx context.Context, question string, sess
 		return nil
 	}
 
-	dbID := s.catalogDBID
 	stream, err := s.raw.AnalyzeDataStream(ctx, &sdk.DataAnalysisRequest{
 		Question:  question,
 		SessionID: strPtr(sessionID),
@@ -265,10 +264,13 @@ func (s *AIService) StreamQueryAnswer(ctx context.Context, question string, sess
 			DataSource: &sdk.DataSource{
 				Type: "specified",
 				Tables: &sdk.DataAskingTableConfig{
-					Type: "all", DbName: s.dbName, DatabaseID: &dbID,
+					Type:      "specified",
+					DbName:    s.dbName,
+					TableList: []string{"daily_entries", "members", "daily_summaries"},
 				},
 			},
-			DataScope: &sdk.DataScope{Type: "all"},
+			DataScope:     &sdk.DataScope{Type: "all"},
+			ContextConfig: &sdk.ContextConfig{MaxKnowledgeItems: 20, MaxKnowledgeValueLength: 200},
 		},
 	})
 	if err != nil {
@@ -353,6 +355,41 @@ func (s *AIService) StreamWeeklySummary(ctx context.Context, userName, data stri
 	system := `根据日报数据生成 Markdown 周报，包含：# 周报 - {姓名}、## 本周重点、## 进展详情、## 风险与阻塞、## 下周计划。`
 	prompt := fmt.Sprintf("姓名：%s\n日报数据：\n%s", userName, data)
 	return s.stream(ctx, system, prompt, flush)
+}
+
+// DateRange 表示 LLM 从自然语言提取的日期范围
+type DateRange struct {
+	Start string `json:"start"` // YYYY-MM-DD
+	End   string `json:"end"`   // YYYY-MM-DD
+}
+
+// ExtractDateRange 从用户输入中提取日期范围，默认最近7天
+func (s *AIService) ExtractDateRange(ctx context.Context, text, today, weekday string) (*DateRange, error) {
+	system := fmt.Sprintf(`你是日期解析助手。今天是 %s（%s）。
+用户会用自然语言描述一个时间范围，请提取为精确日期。
+规则：
+- "本周"指本周一到今天
+- "上周"指上周一到上周日
+- "最近一周"指过去7天
+- "前两周"指过去14天
+- 如果用户没有明确时间，默认最近7天
+只输出 JSON：{"start":"YYYY-MM-DD","end":"YYYY-MM-DD"}`, today, weekday)
+	result, err := s.doChatWithModel(ctx, s.fastModel, system, text, false, nil)
+	if err != nil {
+		return nil, err
+	}
+	// 提取 JSON
+	result = strings.TrimSpace(result)
+	if i := strings.Index(result, "{"); i >= 0 {
+		if j := strings.LastIndex(result, "}"); j > i {
+			result = result[i : j+1]
+		}
+	}
+	var dr DateRange
+	if err := json.Unmarshal([]byte(result), &dr); err != nil {
+		return nil, fmt.Errorf("parse date range: %w (raw: %s)", err, result)
+	}
+	return &dr, nil
 }
 
 // ClassifyIntent 用 qwen-turbo 快速判断意图（带对话历史上下文）

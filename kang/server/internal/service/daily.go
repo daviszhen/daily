@@ -63,12 +63,19 @@ func (s *DailyService) GetDailySummary(ctx context.Context, memberID int, date s
 }
 
 func (s *DailyService) GetMemberWeekData(ctx context.Context, memberID int) (string, error) {
+	return s.GetMemberDateRangeData(ctx, memberID, "", "")
+}
+
+func (s *DailyService) GetMemberDateRangeData(ctx context.Context, memberID int, start, end string) (string, error) {
 	var entries []model.DailyEntry
-	err := s.db.WithContext(ctx).
-		Where("member_id = ? AND daily_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)", memberID).
-		Order("daily_date").Find(&entries).Error
-	if err != nil {
-		return "", fmt.Errorf("query member week: %w", err)
+	q := s.db.WithContext(ctx).Where("member_id = ?", memberID)
+	if start != "" && end != "" {
+		q = q.Where("daily_date BETWEEN ? AND ?", start, end)
+	} else {
+		q = q.Where("daily_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)")
+	}
+	if err := q.Order("daily_date").Find(&entries).Error; err != nil {
+		return "", fmt.Errorf("query member data: %w", err)
 	}
 
 	var sb strings.Builder
@@ -80,7 +87,7 @@ func (s *DailyService) GetMemberWeekData(ctx context.Context, memberID int) (str
 		sb.WriteString(fmt.Sprintf("[%s] %s\n", e.DailyDate, content))
 	}
 	if sb.Len() == 0 {
-		return "本周暂无日报数据", nil
+		return "", nil
 	}
 	return sb.String(), nil
 }

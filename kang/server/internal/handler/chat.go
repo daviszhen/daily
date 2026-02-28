@@ -151,7 +151,7 @@ func (h *ChatHandler) ChatStream(c *gin.Context) {
 		h.saveMessages(name, req.SessionID, req.Text, reply, cfg)
 	case "summary":
 		logger.Info("chat.stream", "uid", uid, "name", name, "mode", "summary")
-		h.streamSummary(ctx, sse, uid, name)
+		h.streamSummary(ctx, sse, uid, name, req.Text)
 	default:
 		// 智能路由：自动识别意图（带对话历史）
 		history := buildHistory(req, 5)
@@ -290,8 +290,8 @@ func (h *ChatHandler) streamQueryCapture(ctx context.Context, sse *sseWriter, qu
 
 	var answer strings.Builder
 	var steps []string
-	sid := sessionIDStr(req.SessionID)
-	if err := h.ai.StreamQueryAnswer(ctx, question, sid, func(t string) {
+	// Data Asking 用独立 session，不共用聊天 session（避免 agent 内部消息污染聊天历史）
+	if err := h.ai.StreamQueryAnswer(ctx, question, "", func(t string) {
 		answer.WriteString(t)
 		sse.token(t)
 	}, func(t string) {
@@ -335,16 +335,32 @@ func (h *ChatHandler) streamQueryCapture(ctx context.Context, sse *sseWriter, qu
 	return answer.String(), cfgJSON
 }
 
-func (h *ChatHandler) streamSummary(ctx context.Context, sse *sseWriter, uid int, name string) {
-	data, err := h.daily.GetMemberWeekData(ctx, uid)
+func (h *ChatHandler) streamSummary(ctx context.Context, sse *sseWriter, uid int, name string, text string) {
+	today := time.Now().Format("2006-01-02")
+	weekday := [...]string{"日", "一", "二", "三", "四", "五", "六"}[time.Now().Weekday()]
+
+	// 有用户输入则提取日期范围，否则默认最近7天
+	var start, end string
+	if strings.TrimSpace(text) != "" {
+		dr, err := h.ai.ExtractDateRange(ctx, text, today, "星期"+weekday)
+		if err != nil {
+			logger.Warn("extract date range fallback", "err", err)
+		} else {
+			start, end = dr.Start, dr.End
+		}
+	}
+
+	data, err := h.daily.GetMemberDateRangeData(ctx, uid, start, end)
 	if err != nil {
-		logger.Error("get week data failed", "err", err)
+		logger.Error("get data failed", "err", err)
 	}
 	if strings.TrimSpace(data) == "" {
-		sse.token("本周暂无日报记录，无法生成周报。请先提交日报后再试。")
+		sse.token("该时间段暂无日报记录，无法生成周报。请先提交日报后再试。")
 		sse.done()
 		return
 	}
+
+	logger.Info("chat.summary", "uid", uid, "start", start, "end", end, "dataLen", len(data))
 	md, err := h.ai.StreamWeeklySummary(ctx, name, data, sse.token)
 	if err != nil {
 		logger.Error("stream summary failed", "err", err)
@@ -356,7 +372,10 @@ func (h *ChatHandler) streamSummary(ctx context.Context, sse *sseWriter, uid int
 	filename := fmt.Sprintf("周报_%s_%s.md", name, time.Now().Format("20060102"))
 	dir := filepath.Join(".", "exports")
 	os.MkdirAll(dir, 0755)
-	os.WriteFile(filepath.Join(dir, filename), []byte(md), 0644)
+	fpath := filepath.Join(dir, filename)
+	os.WriteFile(fpath, []byte(md), 0644)
+	// 5 分钟后自动清理未下载的文件
+	time.AfterFunc(5*time.Minute, func() { os.Remove(fpath) })
 
 	sse.event("meta", map[string]string{
 		"downloadUrl":   "/api/files/" + filename,

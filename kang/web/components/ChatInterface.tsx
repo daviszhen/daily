@@ -92,6 +92,8 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const activeSessionRef = useRef<number | null>(sessionId);
+  const msgCacheRef = useRef<Map<number | null, Message[]>>(new Map());
 
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', role: 'assistant',
@@ -128,8 +130,16 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
     if (activeMode !== 'supplement') setSelectedDate(null);
   }, [activeMode]);
 
-  // Load messages when switching sessions
+  // 切换会话时缓存当前消息，恢复目标会话消息
   useEffect(() => {
+    // 缓存离开的 session 的消息
+    const prevSession = activeSessionRef.current;
+    setMessages(prev => {
+      if (prevSession !== null) msgCacheRef.current.set(prevSession, prev);
+      return prev;
+    });
+    activeSessionRef.current = sessionId;
+
     if (!sessionId) {
       setMessages([{
         id: 'welcome', role: 'assistant',
@@ -138,8 +148,23 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
       }]);
       return;
     }
+
+    // 优先用缓存（流还在跑时 API 里没数据）
+    const cached = msgCacheRef.current.get(sessionId);
+    if (cached && cached.length > 0) {
+      setMessages(cached);
+    }
+    // 同时从 API 加载最新（流完成后后端已存）
     loadSessionMessages(sessionId).then(msgs => {
-      if (msgs.length > 0) setMessages(msgs);
+      if (activeSessionRef.current !== sessionId) return;
+      if (msgs.length > 0) {
+        // 只在 API 返回的消息比缓存多时才更新（避免覆盖进行中的流）
+        const cachedNow = msgCacheRef.current.get(sessionId);
+        if (!cachedNow || msgs.length >= cachedNow.length) {
+          setMessages(msgs);
+          msgCacheRef.current.set(sessionId, msgs);
+        }
+      }
     }).catch(() => {});
   }, [sessionId]);
 
@@ -149,8 +174,10 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
   }
 
   async function handleSend(text: string = input): Promise<void> {
-    if (!text.trim()) return;
-    const isConfirm = ['确认', '是', 'ok', '确认提交', 'confirm'].includes(text.trim().toLowerCase());
+    if (!text.trim() && activeMode !== 'summary') return;
+    const sendText = text.trim() || (activeMode === 'summary' ? '生成最近一周的周报' : '');
+    if (!sendText) return;
+    const isConfirm = ['确认', '是', 'ok', '确认提交', 'confirm'].includes(sendText.toLowerCase());
 
     // 用户主动发新消息时，自动关闭旧的未操作确认卡片
     if (!isConfirm) {
@@ -173,16 +200,19 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
     }
 
     const userMsg: Message = {
-      id: Date.now().toString(), role: 'user', content: text, timestamp: new Date(),
+      id: Date.now().toString(), role: 'user', content: sendText, timestamp: new Date(),
       metadata: selectedDate ? { supplementDate: selectedDate } : undefined,
     };
     setMessages(prev => [...prev.filter(m => m.id !== 'welcome'), userMsg]);
     setInput('');
     setIsLoading(true);
+    const sendSessionId = sid; // 记录发送时的 session，回调里检查是否还是当前 session
+    const isActive = () => activeSessionRef.current === sendSessionId;
 
     try {
-      if (isConfirmation(text)) {
-        const response = await processUserMessage(text, messages, { mode: activeMode, date: selectedDate, sessionId: sid });
+      if (isConfirmation(sendText)) {
+        const response = await processUserMessage(sendText, messages, { mode: activeMode, date: selectedDate, sessionId: sid });
+        if (!isActive()) return;
         setMessages(prev => [...prev, response]);
         onReportSubmitted();
         setActiveMode(null);
@@ -194,29 +224,32 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
       const streamId = (Date.now() + 1).toString();
       setMessages(prev => [...prev, { id: streamId, role: 'assistant', content: '', type: 'text', timestamp: new Date() }]);
       setThinkingSteps([]);
-      setThinkingCollapsed(false);
       setThinkingStartTime(null);
       setThinkingElapsed(0);
 
       const thinkStart = Date.now();
-      const response = await processUserMessage(text, messages, { mode: activeMode, date: selectedDate, sessionId: sid }, {
+      const response = await processUserMessage(sendText, messages, { mode: activeMode, date: selectedDate, sessionId: sid }, {
         onToken(token) {
-          setThinkingCollapsed(true);
-          setMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: m.content + token } : m));
+          if (!isActive()) return;
+          // 收到正文 token 后折叠思考过程
+          setMessages(prev => prev.map(m => m.id === streamId
+            ? { ...m, content: m.content + token, metadata: { ...m.metadata, thinkingCollapsed: true } } : m));
         },
         onResult(data) {
+          if (!isActive()) return;
           setMessages(prev => prev.map(m => m.id === streamId
             ? { ...m, content: '为您总结工作内容如下，请确认是否提交：', type: 'summary_confirm' as any, metadata: data }
             : m));
         },
         onThinking(step) {
+          if (!isActive()) return;
           setThinkingStartTime(prev => prev ?? Date.now());
           setThinkingSteps(prev => [...prev, step]);
-          // Persist into message metadata
+          // 思考中默认展开（thinkingCollapsed: false）
           setMessages(prev => prev.map(m => {
             if (m.id !== streamId) return m;
             const steps = [...(m.metadata?.thinkingSteps || []), step];
-            return { ...m, metadata: { ...m.metadata, thinkingSteps: steps, thinkingElapsed: Date.now() - thinkStart } };
+            return { ...m, metadata: { ...m.metadata, thinkingSteps: steps, thinkingCollapsed: false, thinkingElapsed: Date.now() - thinkStart } };
           }));
         },
       });
@@ -225,9 +258,14 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
       if (response.metadata && response.type !== 'summary_confirm') {
         setMessages(prev => prev.map(m => m.id === streamId ? { ...m, metadata: response.metadata } : m));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
     } finally {
+      // 流完成后同步缓存（不管是否当前 session，确保切回来能看到）
+      if (sendSessionId) {
+        setMessages(prev => { msgCacheRef.current.set(sendSessionId, prev); return prev; });
+      }
+      if (!isActive()) return;
       // Save final elapsed into message metadata
       setMessages(prev => prev.map(m => {
         if (m.metadata?.thinkingSteps?.length > 0 && !m.metadata?.thinkingDone) {
@@ -317,7 +355,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               const isMobile = 'ontouchstart' in window;
-              if (e.key === 'Enter' && !e.shiftKey && !isMobile) { e.preventDefault(); handleSend(); }
+              if (e.key === 'Enter' && !e.shiftKey && !isMobile && !(activeMode === 'supplement' && !selectedDate)) { e.preventDefault(); handleSend(); }
             }}
             placeholder={getPlaceholder()}
             style={{ outline: 'none', boxShadow: 'none' }}
@@ -327,9 +365,9 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
 
           <button
             onClick={() => handleSend()}
-            disabled={!input.trim() || isLoading}
+            disabled={(activeMode !== 'summary' && !input.trim()) || isLoading || (activeMode === 'supplement' && !selectedDate)}
             className={`p-2 m-1.5 rounded-xl transition-all flex-shrink-0 ${
-              input.trim() && !isLoading
+              (input.trim() || activeMode === 'summary') && !isLoading && !(activeMode === 'supplement' && !selectedDate)
                 ? 'bg-gray-900 text-white hover:bg-black shadow-md'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
@@ -390,11 +428,14 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
                       if (!steps?.length) return null;
                       const done = msg.metadata?.thinkingDone as boolean | undefined;
                       const elapsed = (isLoading && !done) ? thinkingElapsed : msg.metadata?.thinkingElapsed as number | undefined;
-                      const collapsed = thinkingCollapsed;
+                      const collapsed = msg.metadata?.thinkingCollapsed !== false; // 默认折叠
+                      const toggleCollapse = () => setMessages(prev => prev.map(m =>
+                        m.id === msg.id ? { ...m, metadata: { ...m.metadata, thinkingCollapsed: collapsed ? false : true } } : m
+                      ));
                       return (
                         <div className="mb-2">
                           <button
-                            onClick={() => setThinkingCollapsed(!thinkingCollapsed)}
+                            onClick={toggleCollapse}
                             className="flex items-center gap-1.5 text-xs font-medium text-indigo-500 hover:text-indigo-700"
                           >
                             <Brain size={13} />
@@ -494,7 +535,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
         })}
 
         {/* Loading spinner (only when no streaming message exists) */}
-        {isLoading && thinkingSteps.length === 0 && !messages.some(m => m.role === 'assistant' && m.content === '') && (
+        {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 rounded-full bg-white border border-gray-100 flex items-center justify-center overflow-hidden">
               <img src={MO_LOGO} alt="Loading" className="w-5 h-5 object-contain" />

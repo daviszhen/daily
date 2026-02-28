@@ -66,7 +66,7 @@ export function Layout({ children, currentView, onChangeView, user, sessions, ac
 
         <div className="flex-1 px-4 py-6 space-y-2 overflow-hidden flex flex-col">
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 mb-4">菜单</div>
-          <NavItem icon={MessageSquare} label="AI 助手" active={currentView === 'chat'} onClick={() => { onNewChat(); setIsMobileMenuOpen(false); }} />
+          <NavItem icon={MessageSquare} label="AI 助手" active={currentView === 'chat' && !activeSessionId} onClick={() => { onNewChat(); setIsMobileMenuOpen(false); }} />
           <NavItem icon={LayoutDashboard} label="团队动态" active={currentView === 'feed'} onClick={() => { onChangeView('feed'); setIsMobileMenuOpen(false); }} />
           <NavItem icon={PieChart} label="数据洞察" active={currentView === 'stats'} onClick={() => { onChangeView('stats'); setIsMobileMenuOpen(false); }} />
 
