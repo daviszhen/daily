@@ -91,11 +91,15 @@ export default function App(): React.ReactElement {
   }
 
   function renderContent(): React.ReactElement {
-    switch (currentView) {
-      case 'feed': return <DailyFeed />;
-      case 'stats': return <Stats />;
-      default: return <ChatInterface user={user} onReportSubmitted={() => {}} sessionId={sessionId} onSessionCreated={handleSessionCreated} />;
-    }
+    return (
+      <>
+        <div style={{ display: currentView === 'chat' ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
+          <ChatInterface user={user} onReportSubmitted={() => {}} sessionId={sessionId} onSessionCreated={handleSessionCreated} />
+        </div>
+        {currentView === 'feed' && <DailyFeed />}
+        {currentView === 'stats' && <Stats />}
+      </>
+    );
   }
 
   return (

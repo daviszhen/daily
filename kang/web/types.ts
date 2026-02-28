@@ -14,6 +14,14 @@ export type MessageMetadata = {
   supplementDate?: string;
   downloadUrl?: string;
   downloadTitle?: string;
+  mode?: string;
+  confirmed?: boolean;
+  dismissed?: boolean;
+  edited?: boolean;
+  thinkingSteps?: string[];
+  thinkingDone?: boolean;
+  thinkingElapsed?: number;
+  thinkingCollapsed?: boolean;
 };
 
 export type Message = {

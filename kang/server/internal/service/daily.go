@@ -21,7 +21,6 @@ func (s *DailyService) Save(ctx context.Context, memberID int, date, content, su
 		date = time.Now().Format("2006-01-02")
 	}
 
-	// 1. 每次提交都 INSERT，保留完整历史
 	entry := model.DailyEntry{
 		MemberID: memberID, DailyDate: date,
 		Content: content, Summary: summary, Source: "chat",
@@ -30,8 +29,6 @@ func (s *DailyService) Save(ctx context.Context, memberID int, date, content, su
 		return 0, fmt.Errorf("insert entry: %w", err)
 	}
 
-	// 2. 取今天所有 entries 的 summary，拼成上下文给调用方合并
-	//    （合并由外层调用 LLM 完成，这里只负责存储）
 	return entry.ID, nil
 }
 

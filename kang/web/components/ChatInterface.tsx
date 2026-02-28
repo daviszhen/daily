@@ -1,5 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Loader2, Sparkles, FileText, Search, Calendar, FileDown, X, ChevronDown, ChevronRight, Brain, Clock } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Message, User } from '../types';
 import { processUserMessage, MO_LOGO, createSession, loadSessionMessages } from '../services/apiService';
 
@@ -12,67 +14,38 @@ interface ChatInterfaceProps {
   onSessionCreated: (id: number) => void;
 }
 
-// Simple markdown renderer for query results
+const mdComponents: Record<string, React.FC<any>> = {
+  h1: ({ children }) => <h2 className="font-bold text-gray-900 text-lg mt-3 mb-1">{children}</h2>,
+  h2: ({ children }) => <h3 className="font-semibold text-gray-900 text-base mt-3 mb-1">{children}</h3>,
+  h3: ({ children }) => <h4 className="font-semibold text-gray-900 text-sm mt-3 mb-1">{children}</h4>,
+  p: ({ children }) => <p className="my-1">{children}</p>,
+  ul: ({ children }) => <ul className="ml-1 space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="ml-1 space-y-0.5 list-decimal list-inside">{children}</ol>,
+  li: ({ children }) => (
+    <div className="flex items-start gap-2 ml-1 my-0.5">
+      <span className="text-indigo-400 mt-1.5 text-[6px]">●</span>
+      <span>{children}</span>
+    </div>
+  ),
+  strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+  code: ({ className, children }: any) => {
+    const isBlock = className?.includes('language-');
+    return isBlock
+      ? <pre className="bg-gray-100 rounded p-2 text-xs overflow-x-auto my-2"><code>{children}</code></pre>
+      : <code className="bg-gray-100 text-indigo-600 px-1 py-0.5 rounded text-xs">{children}</code>;
+  },
+  table: ({ children }) => (
+    <div className="overflow-x-auto my-2">
+      <table className="min-w-full text-sm border-collapse">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead className="bg-gray-50">{children}</thead>,
+  th: ({ children }) => <th className="border border-gray-200 px-3 py-1.5 text-left font-medium text-gray-700">{children}</th>,
+  td: ({ children }) => <td className="border border-gray-200 px-3 py-1.5 text-gray-600">{children}</td>,
+};
+
 function MarkdownContent({ text }: { text: string }): React.ReactElement {
-  if (!text) return <></>;
-  const lines = text.split('\n');
-  const elements: React.ReactElement[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-    if (!trimmed) { elements.push(<br key={i} />); continue; }
-
-    // Headers
-    if (trimmed.startsWith('### ')) {
-      elements.push(<h4 key={i} className="font-semibold text-gray-900 text-sm mt-3 mb-1">{formatInline(trimmed.slice(4))}</h4>);
-    } else if (trimmed.startsWith('## ')) {
-      elements.push(<h3 key={i} className="font-semibold text-gray-900 text-base mt-3 mb-1">{formatInline(trimmed.slice(3))}</h3>);
-    } else if (trimmed.startsWith('# ')) {
-      elements.push(<h2 key={i} className="font-bold text-gray-900 text-lg mt-3 mb-1">{formatInline(trimmed.slice(2))}</h2>);
-    }
-    // Bullets
-    else if (trimmed.startsWith('- ') || trimmed.startsWith('• ') || trimmed.startsWith('* ')) {
-      elements.push(
-        <div key={i} className="flex items-start gap-2 ml-1 my-0.5">
-          <span className="text-indigo-400 mt-1.5 text-[6px]">●</span>
-          <span>{formatInline(trimmed.slice(2))}</span>
-        </div>
-      );
-    }
-    // Numbered list
-    else if (/^\d+[.、]\s/.test(trimmed)) {
-      const match = trimmed.match(/^(\d+[.、])\s(.*)/)!;
-      elements.push(
-        <div key={i} className="flex items-start gap-2 ml-1 my-0.5">
-          <span className="text-indigo-500 font-medium text-sm min-w-[1.2em]">{match[1]}</span>
-          <span>{formatInline(match[2])}</span>
-        </div>
-      );
-    }
-    // Normal paragraph
-    else {
-      elements.push(<p key={i} className="my-0.5">{formatInline(trimmed)}</p>);
-    }
-  }
-  return <div className="space-y-0.5">{elements}</div>;
-}
-
-function formatInline(text: string): React.ReactNode {
-  // Handle **bold** and `code`
-  const parts: React.ReactNode[] = [];
-  const regex = /(\*\*(.+?)\*\*|`(.+?)`)/g;
-  let lastIndex = 0;
-  let match;
-  let key = 0;
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-    if (match[2]) parts.push(<strong key={key++} className="font-semibold text-gray-900">{match[2]}</strong>);
-    else if (match[3]) parts.push(<code key={key++} className="bg-gray-100 text-indigo-600 px-1 py-0.5 rounded text-xs">{match[3]}</code>);
-    lastIndex = regex.lastIndex;
-  }
-  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-  return parts.length === 1 ? parts[0] : <>{parts}</>;
+  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{text}</ReactMarkdown>;
 }
 
 function formatElapsed(ms: number): string {
@@ -132,13 +105,22 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
 
   // 切换会话时缓存当前消息，恢复目标会话消息
   useEffect(() => {
-    // 缓存离开的 session 的消息
     const prevSession = activeSessionRef.current;
-    setMessages(prev => {
-      if (prevSession !== null) msgCacheRef.current.set(prevSession, prev);
-      return prev;
-    });
     activeSessionRef.current = sessionId;
+
+    // 从 null（新建）切到有 ID 的 session：迁移缓存，不重置消息
+    if (prevSession === null && sessionId !== null) {
+      setMessages(prev => {
+        msgCacheRef.current.set(sessionId, prev);
+        return prev;
+      });
+      return;
+    }
+
+    // 缓存离开的 session
+    if (prevSession !== null) {
+      setMessages(prev => { msgCacheRef.current.set(prevSession, prev); return prev; });
+    }
 
     if (!sessionId) {
       setMessages([{
@@ -149,21 +131,19 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
       return;
     }
 
-    // 优先用缓存（流还在跑时 API 里没数据）
+    // 优先用缓存
     const cached = msgCacheRef.current.get(sessionId);
     if (cached && cached.length > 0) {
       setMessages(cached);
+      return; // 有缓存就不从 API 加载，避免覆盖进行中的流
     }
-    // 同时从 API 加载最新（流完成后后端已存）
+
+    // 缓存没有，从 API 加载
     loadSessionMessages(sessionId).then(msgs => {
       if (activeSessionRef.current !== sessionId) return;
       if (msgs.length > 0) {
-        // 只在 API 返回的消息比缓存多时才更新（避免覆盖进行中的流）
-        const cachedNow = msgCacheRef.current.get(sessionId);
-        if (!cachedNow || msgs.length >= cachedNow.length) {
-          setMessages(msgs);
-          msgCacheRef.current.set(sessionId, msgs);
-        }
+        setMessages(msgs);
+        msgCacheRef.current.set(sessionId, msgs);
       }
     }).catch(() => {});
   }, [sessionId]);
@@ -201,7 +181,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
 
     const userMsg: Message = {
       id: Date.now().toString(), role: 'user', content: sendText, timestamp: new Date(),
-      metadata: selectedDate ? { supplementDate: selectedDate } : undefined,
+      metadata: { ...(selectedDate ? { supplementDate: selectedDate } : {}), ...(activeMode ? { mode: activeMode } : {}) },
     };
     setMessages(prev => [...prev.filter(m => m.id !== 'welcome'), userMsg]);
     setInput('');
@@ -251,6 +231,10 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
             const steps = [...(m.metadata?.thinkingSteps || []), step];
             return { ...m, metadata: { ...m.metadata, thinkingSteps: steps, thinkingCollapsed: false, thinkingElapsed: Date.now() - thinkStart } };
           }));
+        },
+        onModeSwitch(mode) {
+          if (!isActive()) return;
+          setActiveMode(mode as ChatMode);
         },
       });
 

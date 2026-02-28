@@ -195,6 +195,17 @@ func (s *CatalogSync) SyncAllMembers(db *gorm.DB) {
 	s.SyncMembers(context.Background(), rows)
 }
 
+// SyncAllEntries 全量同步 daily_entries 到 Catalog（去重后调用一次）
+func (s *CatalogSync) SyncAllEntries(db *gorm.DB) {
+	var entries []model.DailyEntry
+	if err := db.Find(&entries).Error; err != nil {
+		logger.Warn("catalog sync: query entries failed", "err", err)
+		return
+	}
+	logger.Info("catalog sync: full entries sync", "count", len(entries))
+	s.SyncDailyEntries(context.Background(), entries)
+}
+
 func (s *CatalogSync) importCSV(ctx context.Context, tableID sdk.TableID, csv, fileName string, mapping []sdk.FileAndTableColumnMapping) {
 	resp, err := s.raw.UploadLocalFile(ctx, bytes.NewReader([]byte(csv)), fileName, []sdk.FileMeta{{Filename: fileName, Path: "/"}})
 	if err != nil {

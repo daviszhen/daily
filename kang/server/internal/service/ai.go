@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	sdk "github.com/matrixorigin/moi-go-sdk"
 )
@@ -29,6 +30,53 @@ func NewAIService(baseURL, apiKey, model, fastModel, dbName string, raw *sdk.Raw
 }
 
 func (s *AIService) SetCatalogDBID(id int) { s.catalogDBID = id }
+
+// SeedKnowledge 初始化 NL2SQL Knowledge，让 Data Asking 了解表结构
+func (s *AIService) SeedKnowledge(ctx context.Context) {
+	if s.raw == nil {
+		return
+	}
+	// 检查是否已有 knowledge
+	list, err := s.raw.ListKnowledge(ctx, &sdk.NL2SQLKnowledgeListRequest{PageNumber: 1, PageSize: 1})
+	if err == nil && list.Total > 0 {
+		return // 已初始化
+	}
+
+	knowledges := []sdk.NL2SQLKnowledgeCreateRequest{
+		{
+			Type: "term_explanation", Key: "members表",
+			Value:           []string{"members 表存储团队成员信息。字段：id(主键), username(登录名), name(中文姓名), role(职位), team(所属团队)。查询某人信息时用 name 字段匹配中文名。"},
+			AssociateTables: []string{"members"},
+		},
+		{
+			Type: "term_explanation", Key: "daily_entries表",
+			Value:           []string{"daily_entries 表存储每条日报原始记录。字段：id(主键), member_id(关联members.id), daily_date(日期,date类型), content(原始工作内容), summary(AI摘要), source(来源:chat或import), created_at(创建时间)。一个人一天可能有多条记录。"},
+			AssociateTables: []string{"daily_entries"},
+		},
+		{
+			Type: "term_explanation", Key: "daily_summaries表",
+			Value:           []string{"daily_summaries 表存储每人每天的合并总结。字段：id(主键), member_id(关联members.id), daily_date(日期), summary(当天合并总结), risk(风险项), blocker(阻塞项), status(状态)。每人每天最多一条。"},
+			AssociateTables: []string{"daily_summaries"},
+		},
+		{
+			Type: "sql_example", Key: "查询某人某天做了什么",
+			Value:           []string{"SELECT m.name, e.daily_date, e.summary FROM daily_entries e JOIN members m ON e.member_id = m.id WHERE m.name = '某人' AND e.daily_date = '2026-02-28'"},
+			AssociateTables: []string{"daily_entries", "members"},
+		},
+		{
+			Type: "sql_example", Key: "查询团队某天所有人的工作",
+			Value:           []string{"SELECT m.name, s.summary, s.risk FROM daily_summaries s JOIN members m ON s.member_id = m.id WHERE s.daily_date = '2026-02-28' ORDER BY m.name"},
+			AssociateTables: []string{"daily_summaries", "members"},
+		},
+	}
+
+	for _, k := range knowledges {
+		if _, err := s.raw.CreateKnowledge(ctx, &k); err != nil {
+			fmt.Printf("[knowledge] seed failed: %s: %v\n", k.Key, err)
+		}
+	}
+	fmt.Printf("[knowledge] seeded %d entries\n", len(knowledges))
+}
 
 func (s *AIService) doChat(ctx context.Context, system, user string, stream bool, flush func(string)) (string, error) {
 	return s.doChatWithModel(ctx, s.model, system, user, stream, flush)
@@ -130,6 +178,13 @@ func (s *AIService) stream(ctx context.Context, system, user string, flush func(
 	return s.doChat(ctx, system, user, true, flush)
 }
 
+// todayContext 返回统一的日期上下文前缀，注入到所有需要时间感知的 prompt
+func todayContext() string {
+	now := time.Now()
+	weekdays := []string{"日", "一", "二", "三", "四", "五", "六"}
+	return fmt.Sprintf("今天是%s（星期%s）。", now.Format("2006-01-02"), weekdays[now.Weekday()])
+}
+
 // ValidateWorkContent 快速判断输入是否为有效工作内容
 func (s *AIService) ValidateWorkContent(ctx context.Context, content string) (valid bool, reply string, err error) {
 	system := `判断用户输入是否为"今天做了什么"的工作汇报内容。
@@ -163,9 +218,10 @@ func (s *AIService) ExtractWorkContent(ctx context.Context, current string, hist
 	if len(userHistory) == 0 {
 		return current, nil
 	}
-	system := `你是日报助手。用户在多轮对话中描述了工作内容，请从用户的历史消息和最新消息中提取完整的工作描述。
+	system := todayContext() + `你是日报助手。用户在多轮对话中描述了工作内容，请从用户的历史消息和最新消息中提取完整的工作描述。
 规则：
 - 只提取用户明确说过的内容，绝对不要添加用户没说过的细节
+- 用户说"今天"指的是今天的日期
 - 合并相关信息为完整描述
 - 只输出提取后的工作内容文本，不加任何解释`
 	result, err := s.doChatWithHistory(ctx, s.model, system, userHistory, current, false, nil)
@@ -215,10 +271,10 @@ func (s *AIService) AssessCompleteness(ctx context.Context, content string) (suf
 	return parsed.Sufficient, parsed.FollowUp, nil
 }
 
-// StreamSummarize 流式生成工作摘要（纯文本，每条 • 开头）
+// StreamSummarize 流式生成工作摘要
 func (s *AIService) StreamSummarize(ctx context.Context, content string, flush func(string)) (string, error) {
 	system := `你是日报摘要助手。用简洁要点总结用户的工作内容。规则：
-- 每条以 • 开头，每条独占一行
+- 每条以 - 开头，每条独占一行
 - 同一件事的描述和补充信息合并为一条，不要拆分
 - 直接输出摘要文本，不要加标题或额外说明`
 	result, err := s.stream(ctx, system, content, flush)
@@ -377,7 +433,7 @@ func (s *AIService) flushInsightBlocks(data map[string]interface{}, flush func(s
 							continue
 						}
 						seen[val] = true
-						flush("\n• " + val)
+						flush("\n- " + val)
 					}
 				} else {
 					// Markdown table for multi-column results
@@ -414,7 +470,7 @@ func (s *AIService) MergeDailySummary(ctx context.Context, entries []string) (st
 规则：
 - 如果后面的记录修正了前面的内容，以最新为准
 - 去重，合并相同事项
-- 每条以 • 开头，直接输出合并后的摘要`
+- 每条以 - 开头，直接输出合并后的摘要`
 	user := "以下是今天多次提交的工作记录（按时间顺序）：\n" + strings.Join(entries, "\n---\n")
 	return s.doChatWithModel(ctx, s.fastModel, system, user, false, nil)
 }
@@ -461,13 +517,23 @@ func (s *AIService) ExtractDateRange(ctx context.Context, text, today, weekday s
 	return &dr, nil
 }
 
-// ClassifyIntent 用 qwen-turbo 快速判断意图（带对话历史上下文）
+// ClassifyIntent 判断用户输入意图。
+// history=nil 时做纯文本分类（用于模式验证），有 history 时结合上下文（用于自动路由）。
 func (s *AIService) ClassifyIntent(ctx context.Context, text string, history []map[string]string) (string, error) {
-	system := `判断用户输入的意图，结合对话历史理解上下文，返回一个词：
-- report：用户在描述自己做了什么工作（如"今天修了个bug"、"完成了XX功能开发"）
-- query：用户在查询数据、统计、查看日报、查人员信息（如"张三最近做了什么"、"本周团队进展"）
-- chat：闲聊、问候、感谢、提问、求建议、补充说明等其他情况
-注意：如果用户在补充之前对话的信息（如之前聊了工作内容，现在补充细节），应归为之前的意图类型。
+	system := todayContext() + `你是意图分类器。判断用户这句话的意图，返回一个词：
+
+report — 用户在陈述/汇报自己完成的工作
+  ✓ "今天修了个bug"、"完成了XX功能"、"写了个接口"、"开了个会"
+  ✓ 主语是"我"且是过去时陈述句
+
+query — 用户在提问/查询数据
+  ✓ "我今天干啥了"、"张三最近做了什么"、"谁没交日报"、"本周进展"
+  ✓ 带疑问词（啥、什么、哪些、谁、几个、多少）
+  ✓ 带疑问语气（了吗、没有、怎样）
+
+chat — 其他（闲聊、问候、感谢、求建议）
+
+核心规则：有疑问词或疑问语气 → query，纯陈述 → report。
 只返回一个词。`
 	result, err := s.doChatWithHistory(ctx, s.fastModel, system, history, text, false, nil)
 	if err != nil {
@@ -484,7 +550,7 @@ func (s *AIService) ClassifyIntent(ctx context.Context, text string, history []m
 
 // StreamChat 闲聊流式回复（带上下文）
 func (s *AIService) StreamChat(ctx context.Context, text string, history []map[string]string, flush func(string)) error {
-	system := `你是 MOI 智能日报助手。友好简洁地回复用户。
+	system := todayContext() + `你是 MOI 智能日报助手。友好简洁地回复用户。
 严格规则：
 - 绝对不要编造任何工作内容、日报数据、进展或统计信息
 - 不要假装"已记录"或"已保存"任何内容，你没有记录功能

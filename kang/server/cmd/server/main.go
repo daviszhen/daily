@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"flag"
 	"io/fs"
@@ -52,6 +53,8 @@ func main() {
 	if catalogSync != nil && catalogSync.Ready() {
 		go catalogSync.SyncAllMembers(db)
 	}
+	// Seed NL2SQL knowledge for Data Asking
+	go aiSvc.SeedKnowledge(context.Background())
 
 	chatH := handler.NewChatHandler(aiSvc, dailySvc, catalogSync)
 	authH := handler.NewAuthHandler(authSvc)

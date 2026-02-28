@@ -66,6 +66,7 @@ interface StreamCallbacks {
   onToken?: (token: string) => void;
   onResult?: (data: any) => void;
   onThinking?: (text: string) => void;
+  onModeSwitch?: (mode: string) => void;
 }
 
 export async function processUserMessage(
@@ -75,7 +76,7 @@ export async function processUserMessage(
   callbacks?: StreamCallbacks,
 ): Promise<Message> {
   const { mode, date, sessionId } = options || {};
-  const { onToken, onResult, onThinking } = callbacks || {};
+  const { onToken, onResult, onThinking, onModeSwitch } = callbacks || {};
 
   const lowerText = text.toLowerCase().trim();
   const isConfirmation = lowerText === '确认' || lowerText === '是' || lowerText === 'ok' ||
@@ -122,7 +123,7 @@ export async function processUserMessage(
   }
   const recent = filtered.slice(-10);
   if (recent.length > 0) {
-    body.history = recent.map(m => ({ role: m.role, content: m.content }));
+    body.history = recent.map(m => ({ role: m.role, content: m.content, mode: m.metadata?.mode || '' }));
   }
 
   const res = await apiFetch('/api/chat/stream', {
@@ -161,6 +162,8 @@ export async function processUserMessage(
             metadata = parsed;
           } else if (currentEvent === 'thinking' && parsed.text) {
             onThinking?.(parsed.text);
+          } else if (currentEvent === 'mode_switch' && parsed.mode) {
+            onModeSwitch?.(parsed.mode);
           }
         } catch { /* ignore malformed SSE data */ }
       }

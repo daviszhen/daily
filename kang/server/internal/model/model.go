@@ -12,6 +12,7 @@ type ChatRequest struct {
 type HistoryItem struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+	Mode    string `json:"mode,omitempty"`
 }
 
 type ChatResponse struct {

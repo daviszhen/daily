@@ -142,10 +142,26 @@ func (h *ChatHandler) ChatStream(c *gin.Context) {
 	switch req.Mode {
 	case "report", "supplement":
 		logger.Info("chat.stream", "uid", uid, "name", name, "mode", req.Mode, "text", req.Text, "date", req.Date)
+		// 模式验证：检测输入是否匹配当前模式
+		intent, _ := h.ai.ClassifyIntent(ctx, req.Text, nil) // 无历史，纯看当前输入
+		if intent == "query" {
+			sse.token("这看起来是个数据查询，建议切换到「查询团队动态」模式。\n如果确实是在描述工作内容，请换个方式表述。")
+			sse.done()
+			h.saveMessages(name, req.SessionID, req.Text, "这看起来是个数据查询，建议切换到「查询团队动态」模式。\n如果确实是在描述工作内容，请换个方式表述。", "")
+			return
+		}
 		reply, cfg := h.streamReportCapture(ctx, sse, uid, req)
 		h.saveMessages(name, req.SessionID, req.Text, reply, cfg)
 	case "query":
 		logger.Info("chat.stream", "uid", uid, "name", name, "mode", "query", "question", req.Text)
+		// 模式验证：检测输入是否匹配当前模式
+		intent, _ := h.ai.ClassifyIntent(ctx, req.Text, nil)
+		if intent == "report" {
+			sse.token("这看起来是在汇报工作内容，建议切换到「汇报今日工作」模式。\n如果确实是在查询数据，请换个方式提问。")
+			sse.done()
+			h.saveMessages(name, req.SessionID, req.Text, "这看起来是在汇报工作内容，建议切换到「汇报今日工作」模式。\n如果确实是在查询数据，请换个方式提问。", "")
+			return
+		}
 		question := injectUserIdentity(req.Text, name)
 		reply, cfg := h.streamQueryCapture(ctx, sse, question, req)
 		h.saveMessages(name, req.SessionID, req.Text, reply, cfg)
@@ -153,22 +169,26 @@ func (h *ChatHandler) ChatStream(c *gin.Context) {
 		logger.Info("chat.stream", "uid", uid, "name", name, "mode", "summary")
 		h.streamSummary(ctx, sse, uid, name, req.Text)
 	default:
-		// 智能路由：自动识别意图（带对话历史）
+		// 无模式：检测意图 → 自动切换 + 执行，或闲聊
 		history := buildHistory(req, 5)
 		intent, _ := h.ai.ClassifyIntent(ctx, req.Text, history)
 		logger.Info("chat.stream", "uid", uid, "name", name, "mode", "auto", "intent", intent, "text", req.Text)
 		switch intent {
 		case "report":
+			// 自动切换到 report 模式 + 执行
+			sse.event("mode_switch", map[string]string{"mode": "report"})
 			req.Mode = "report"
 			reply, cfg := h.streamReportCapture(ctx, sse, uid, req)
 			h.saveMessages(name, req.SessionID, req.Text, reply, cfg)
 		case "query":
+			// 自动切换到 query 模式 + 执行
+			sse.event("mode_switch", map[string]string{"mode": "query"})
 			question := injectUserIdentity(req.Text, name)
 			reply, cfg := h.streamQueryCapture(ctx, sse, question, req)
 			h.saveMessages(name, req.SessionID, req.Text, reply, cfg)
 		default:
+			// 闲聊
 			var reply strings.Builder
-			history := buildHistory(req, 5)
 			if err := h.ai.StreamChat(ctx, req.Text, history, func(t string) { reply.WriteString(t); sse.token(t) }); err != nil {
 				sse.token("抱歉，服务暂时不可用，请稍后再试。")
 			}
@@ -179,7 +199,7 @@ func (h *ChatHandler) ChatStream(c *gin.Context) {
 }
 
 func (h *ChatHandler) streamReportCapture(ctx context.Context, sse *sseWriter, uid int, req model.ChatRequest) (string, string) {
-	history := buildHistory(req, 5)
+	history := buildHistoryFiltered(req, 5, "report")
 
 	// 让 LLM 从对话历史中提取完整工作内容
 	extracted, err := h.ai.ExtractWorkContent(ctx, req.Text, history)
@@ -246,8 +266,24 @@ func (h *ChatHandler) streamReportCapture(ctx context.Context, sse *sseWriter, u
 
 // buildHistory 从请求中提取最近 N 轮对话历史（用于 LLM 上下文）
 func buildHistory(req model.ChatRequest, maxPairs int) []map[string]string {
+	return buildHistoryFiltered(req, maxPairs, "")
+}
+
+func buildHistoryFiltered(req model.ChatRequest, maxPairs int, modeFilter string) []map[string]string {
 	h := req.History
-	// 最多取最近 maxPairs 对（user+assistant）
+	if modeFilter != "" {
+		var filtered []model.HistoryItem
+		for i, m := range h {
+			if m.Mode == modeFilter {
+				filtered = append(filtered, m)
+				// 也带上紧跟的 assistant 回复
+				if m.Role == "user" && i+1 < len(h) && h[i+1].Role == "assistant" {
+					filtered = append(filtered, h[i+1])
+				}
+			}
+		}
+		h = filtered
+	}
 	if max := maxPairs * 2; len(h) > max {
 		h = h[len(h)-max:]
 	}
@@ -277,17 +313,6 @@ func injectUserIdentity(question, userName string) string {
 }
 
 func (h *ChatHandler) streamQueryCapture(ctx context.Context, sse *sseWriter, question string, req model.ChatRequest) (string, string) {
-	history := buildHistory(req, 5)
-	intent, _ := h.ai.ClassifyIntent(ctx, question, history)
-	logger.Info("chat.query.intent", "question", question, "intent", intent)
-
-	if intent == "chat" {
-		var reply strings.Builder
-		h.ai.StreamChat(ctx, question, history, func(t string) { reply.WriteString(t); sse.token(t) })
-		sse.done()
-		return reply.String(), ""
-	}
-
 	var answer strings.Builder
 	var steps []string
 	queryStart := time.Now()
