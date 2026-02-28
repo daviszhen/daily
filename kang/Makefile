@@ -23,8 +23,8 @@ run: build
 	@sleep 2; if lsof -ti:9871 > /dev/null 2>&1; then echo "✅ Running on :9871 (pid: $$(cat .pid))"; else echo "⏳ Waiting..."; sleep 5; echo "✅ Running on :9871 (pid: $$(cat .pid))"; fi
 
 run-stop:
-	@if [ -f .pid ]; then kill $$(cat .pid) 2>/dev/null; rm -f .pid; fi
-	@lsof -ti:9871 | xargs kill -9 2>/dev/null
+	@lsof -ti:9871 | xargs kill -9 2>/dev/null || true
+	@rm -f .pid
 	@echo "✅ Stopped"
 
 # ============ 辅助 ============
