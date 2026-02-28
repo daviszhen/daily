@@ -460,7 +460,9 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
                     })()}
                     {isUser
                       ? <p className="whitespace-pre-wrap">{msg.content}</p>
-                      : <MarkdownContent text={msg.content} />
+                      : msg.content === '' && isLoading
+                        ? <Loader2 size={16} className="animate-spin text-gray-400" />
+                        : <MarkdownContent text={msg.content} />
                     }
                   </div>
                   )}

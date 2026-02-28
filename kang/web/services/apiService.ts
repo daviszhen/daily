@@ -22,6 +22,11 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<Respon
     localStorage.removeItem('user');
     window.location.reload();
   }
+  const newToken = res.headers.get('X-New-Token');
+  if (newToken) {
+    _token = newToken;
+    localStorage.setItem('token', newToken);
+  }
   return res;
 }
 
@@ -220,6 +225,40 @@ export async function loadSessionMessages(sessionId: number): Promise<Message[]>
 }
 
 function tryParse(s: string): any { try { return JSON.parse(s); } catch { return {}; } }
+
+// ============ Import ============
+
+export interface PreviewEntry { date: string; name: string; content: string }
+export interface PreviewResult { token: string; entries: PreviewEntry[]; unmatched_members: string[] }
+export interface ConfirmResult { imported: number; merged: number; skipped: number; skipped_members: string[]; total: number }
+
+export async function previewImport(file: File): Promise<PreviewResult> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await fetch('/api/import/preview', {
+    method: 'POST',
+    headers: _token ? { 'Authorization': `Bearer ${_token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '解析失败' }));
+    throw new Error(err.error || '解析失败');
+  }
+  return res.json();
+}
+
+export async function confirmImport(token: string): Promise<ConfirmResult> {
+  const res = await fetch('/api/import/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(_token ? { 'Authorization': `Bearer ${_token}` } : {}) },
+    body: JSON.stringify({ token }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: '导入失败' }));
+    throw new Error(err.error || '导入失败');
+  }
+  return res.json();
+}
 
 // ============ Feed ============
 

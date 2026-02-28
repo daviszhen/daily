@@ -34,6 +34,11 @@ func (s *AIService) doChat(ctx context.Context, system, user string, stream bool
 	return s.doChatWithModel(ctx, s.model, system, user, stream, flush)
 }
 
+// DoChat is a public non-streaming chat call (used by import handler)
+func (s *AIService) DoChat(ctx context.Context, system, user string) (string, error) {
+	return s.doChat(ctx, system, user, false, nil)
+}
+
 func (s *AIService) doChatWithModel(ctx context.Context, model, system, user string, stream bool, flush func(string)) (string, error) {
 	return s.doChatWithHistory(ctx, model, system, nil, user, stream, flush)
 }
@@ -331,9 +336,73 @@ func (s *AIService) flushInsightBlocks(data map[string]interface{}, flush func(s
 		if !ok {
 			continue
 		}
-		if text, ok := block["text"].(map[string]interface{}); ok {
-			if content, ok := text["content"].(string); ok {
-				flush(content)
+		hasTables := false
+		// Check if block has tables
+		if tables, ok := block["tables"].([]interface{}); ok && len(tables) > 0 {
+			hasTables = true
+		}
+		// Render text only when no tables (otherwise it's redundant)
+		if !hasTables {
+			if text, ok := block["text"].(map[string]interface{}); ok {
+				if content, ok := text["content"].(string); ok {
+					flush(content)
+				}
+			}
+		}
+		// Render tables
+		if tables, ok := block["tables"].([]interface{}); ok {
+			for _, t := range tables {
+				tbl, ok := t.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				rows, _ := tbl["rowValues"].([]interface{})
+				headers, _ := tbl["columnHeaders"].([]interface{})
+				if len(rows) == 0 {
+					continue
+				}
+				if title, ok := tbl["title"].(string); ok && title != "" {
+					flush(title + "：")
+				}
+				// Use first column as bullet list for simple results
+				if len(headers) <= 2 {
+					seen := map[string]bool{}
+					for _, r := range rows {
+						row, ok := r.([]interface{})
+						if !ok || len(row) == 0 {
+							continue
+						}
+						val := fmt.Sprintf("%v", row[0])
+						if seen[val] {
+							continue
+						}
+						seen[val] = true
+						flush("\n• " + val)
+					}
+				} else {
+					// Markdown table for multi-column results
+					var hdr []string
+					for _, h := range headers {
+						hdr = append(hdr, fmt.Sprintf("%v", h))
+					}
+					flush("\n| " + strings.Join(hdr, " | ") + " |")
+					sep := make([]string, len(hdr))
+					for i := range sep {
+						sep[i] = "---"
+					}
+					flush("\n| " + strings.Join(sep, " | ") + " |")
+					for _, r := range rows {
+						row, ok := r.([]interface{})
+						if !ok {
+							continue
+						}
+						var cells []string
+						for _, c := range row {
+							cells = append(cells, fmt.Sprintf("%v", c))
+						}
+						flush("\n| " + strings.Join(cells, " | ") + " |")
+					}
+				}
 			}
 		}
 	}

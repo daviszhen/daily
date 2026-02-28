@@ -3,8 +3,11 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"smart-daily/internal/logger"
+	"smart-daily/internal/model"
 	"strconv"
 	"strings"
 	"time"
@@ -19,13 +22,17 @@ type CatalogSync struct {
 	databaseID sdk.DatabaseID
 	tableIDs   map[string]sdk.TableID // table name -> table ID
 	ready      bool
+	baseURL    string
+	apiKey     string
 }
 
-func NewCatalogSync(raw *sdk.RawClient, catalogID int64, dbName string) *CatalogSync {
+func NewCatalogSync(raw *sdk.RawClient, catalogID int64, dbName, baseURL, apiKey string) *CatalogSync {
 	s := &CatalogSync{
 		raw:      raw,
 		sdk:      sdk.NewSDKClient(raw),
 		tableIDs: make(map[string]sdk.TableID),
+		baseURL:  baseURL,
+		apiKey:   apiKey,
 	}
 	s.discover(catalogID, dbName)
 	return s
@@ -91,7 +98,7 @@ func (s *CatalogSync) SyncDailySummary(ctx context.Context, entryID, memberID in
 	now := time.Now().Format("2006-01-02 15:04:05")
 
 	entryCsv := fmt.Sprintf("%d,%d,%s,%s,%s,chat,%s\n",
-		entryID, memberID, date, esc(content), esc(summary), now)
+		entryID, memberID, dateOnly(date), esc(content), esc(summary), now)
 	s.importCSV(ctx, s.tableIDs["daily_entries"], entryCsv, fmt.Sprintf("entry_%d.csv", entryID),
 		[]sdk.FileAndTableColumnMapping{
 			{TableColumn: "id", Column: "id", ColNumInFile: 1},
@@ -104,8 +111,42 @@ func (s *CatalogSync) SyncDailySummary(ctx context.Context, entryID, memberID in
 		})
 
 	sumCsv := fmt.Sprintf("%d,%d,%s,%s,,%s,\n",
-		entryID, memberID, date, esc(summary), esc(risk))
+		entryID, memberID, dateOnly(date), esc(summary), esc(risk))
 	s.importCSV(ctx, s.tableIDs["daily_summaries"], sumCsv, fmt.Sprintf("sum_%d.csv", entryID),
+		[]sdk.FileAndTableColumnMapping{
+			{TableColumn: "id", Column: "id", ColNumInFile: 1},
+			{TableColumn: "member_id", Column: "member_id", ColNumInFile: 2},
+			{TableColumn: "daily_date", Column: "daily_date", ColNumInFile: 3},
+			{TableColumn: "summary", Column: "summary", ColNumInFile: 4},
+			{TableColumn: "status", Column: "status", ColNumInFile: 5},
+			{TableColumn: "risk", Column: "risk", ColNumInFile: 6},
+			{TableColumn: "blocker", Column: "blocker", ColNumInFile: 7},
+		})
+}
+
+func (s *CatalogSync) SyncDailyEntries(ctx context.Context, entries []model.DailyEntry) {
+	if !s.ready || len(entries) == 0 {
+		return
+	}
+	now := time.Now().Format("2006-01-02 15:04:05")
+	var entryBuf, sumBuf bytes.Buffer
+	for _, e := range entries {
+		fmt.Fprintf(&entryBuf, "%d,%d,%s,%s,%s,%s,%s\n",
+			e.ID, e.MemberID, dateOnly(e.DailyDate), esc(e.Content), esc(e.Summary), e.Source, now)
+		fmt.Fprintf(&sumBuf, "%d,%d,%s,%s,,,\n",
+			e.ID, e.MemberID, dateOnly(e.DailyDate), esc(e.Summary))
+	}
+	s.importCSV(ctx, s.tableIDs["daily_entries"], entryBuf.String(), "import_entries.csv",
+		[]sdk.FileAndTableColumnMapping{
+			{TableColumn: "id", Column: "id", ColNumInFile: 1},
+			{TableColumn: "member_id", Column: "member_id", ColNumInFile: 2},
+			{TableColumn: "daily_date", Column: "daily_date", ColNumInFile: 3},
+			{TableColumn: "content", Column: "content", ColNumInFile: 4},
+			{TableColumn: "summary", Column: "summary", ColNumInFile: 5},
+			{TableColumn: "source", Column: "source", ColNumInFile: 6},
+			{TableColumn: "created_at", Column: "created_at", ColNumInFile: 7},
+		})
+	s.importCSV(ctx, s.tableIDs["daily_summaries"], sumBuf.String(), "import_summaries.csv",
 		[]sdk.FileAndTableColumnMapping{
 			{TableColumn: "id", Column: "id", ColNumInFile: 1},
 			{TableColumn: "member_id", Column: "member_id", ColNumInFile: 2},
@@ -173,7 +214,7 @@ func (s *CatalogSync) importCSV(ctx context.Context, tableID sdk.TableID, csv, f
 		TableID:          tableID,
 		IsColumnName:     false,
 		RowStart:         1,
-		Conflict:         1,
+		Conflict:         sdk.ConflictPolicyReplace,
 		ExistedTable:     mapping,
 		ExistedTableOpts: sdk.ExistedTableOptions{Method: sdk.ExistedTableOptionAppend},
 	})
@@ -181,12 +222,66 @@ func (s *CatalogSync) importCSV(ctx context.Context, tableID sdk.TableID, csv, f
 		logger.Warn("catalog sync: import failed", "table", tableID, "err", err)
 		return
 	}
-	logger.Info("catalog sync: ok", "table", tableID, "file", fileName, "import_resp", fmt.Sprintf("%+v", importResp))
+
+	logger.Info("catalog sync: task submitted", "table", tableID, "file", fileName, "task_id", importResp.TaskId)
+	if importResp.TaskId != 0 {
+		go s.pollTask(tableID, fileName, importResp.TaskId)
+	}
+}
+
+// pollTask polls task status via direct HTTP call.
+// SDK's GetTask has a bug: doesn't handle {"task":{...}} wrapper and status is int not string.
+func (s *CatalogSync) pollTask(tableID sdk.TableID, fileName string, taskID int64) {
+	type envelope struct {
+		Code string `json:"code"`
+		Data struct {
+			Task struct {
+				Status      int `json:"status"`
+				LoadResults []struct {
+					Lines  int64  `json:"lines"`
+					Reason string `json:"reason"`
+				} `json:"load_results"`
+			} `json:"task"`
+		} `json:"data"`
+	}
+	url := fmt.Sprintf("%s/task/get?task_id=%d", s.baseURL, taskID)
+	for i := 0; i < 30; i++ {
+		time.Sleep(2 * time.Second)
+		req, _ := http.NewRequest("GET", url, nil)
+		req.Header.Set("moi-key", s.apiKey)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			logger.Warn("catalog sync: poll failed", "table", tableID, "task", taskID, "err", err)
+			return
+		}
+		var env envelope
+		json.NewDecoder(resp.Body).Decode(&env)
+		resp.Body.Close()
+
+		switch env.Data.Task.Status {
+		case 4: // Finished
+			lines := int64(0)
+			for _, r := range env.Data.Task.LoadResults {
+				lines += r.Lines
+			}
+			logger.Info("catalog sync: task done", "table", tableID, "file", fileName, "task", taskID, "lines", lines)
+			return
+		}
+	}
+	logger.Warn("catalog sync: task poll timeout", "table", tableID, "task", taskID)
 }
 
 func esc(s string) string {
 	if strings.ContainsAny(s, ",\"\n\r") {
 		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+	}
+	return s
+}
+
+// dateOnly strips time portion from date strings like "2026-01-21T00:00:00Z" → "2026-01-21"
+func dateOnly(s string) string {
+	if len(s) >= 10 {
+		return s[:10]
 	}
 	return s
 }

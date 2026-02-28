@@ -38,7 +38,7 @@ func main() {
 
 	var catalogSync *service.CatalogSync
 	if raw != nil {
-		catalogSync = service.NewCatalogSync(raw, cfg.MOI.CatalogID, cfg.Database.Name)
+		catalogSync = service.NewCatalogSync(raw, cfg.MOI.CatalogID, cfg.Database.Name, cfg.MOI.BaseURL, cfg.MOI.APIKey)
 	}
 
 	aiSvc := service.NewAIService(cfg.MOI.BaseURL, cfg.MOI.APIKey, cfg.MOI.Model, cfg.MOI.FastModel, cfg.Database.Name, raw)
@@ -55,6 +55,7 @@ func main() {
 
 	chatH := handler.NewChatHandler(aiSvc, dailySvc, catalogSync)
 	authH := handler.NewAuthHandler(authSvc)
+	importH := handler.NewImportHandler(db, aiSvc, catalogSync)
 	sessionSvc := service.NewSessionService(cfg.MOI.BaseURL, cfg.MOI.APIKey)
 	sessionH := handler.NewSessionHandler(sessionSvc)
 
@@ -77,6 +78,8 @@ func main() {
 	api.GET("/sessions", sessionH.List)
 	api.DELETE("/sessions/:id", sessionH.Delete)
 	api.GET("/sessions/:id/messages", sessionH.Messages)
+	api.POST("/import/preview", importH.Preview)
+	api.POST("/import/confirm", importH.Confirm)
 
 	distFS, _ := fs.Sub(staticFS, "dist")
 	r.NoRoute(gin.WrapH(http.FileServer(http.FS(distFS))))

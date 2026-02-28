@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, MessageSquare, PieChart, Menu, X, Bell, UploadCloud, FileUp, CheckCircle2, LogOut, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { LayoutDashboard, MessageSquare, PieChart, Menu, X, Bell, UploadCloud, FileUp, CheckCircle2, LogOut, Trash2, Eye } from 'lucide-react';
 import { ViewMode, User } from '../types';
-import { MO_LOGO, logout, SessionInfo } from '../services/apiService';
+import { MO_LOGO, logout, SessionInfo, previewImport, confirmImport, PreviewEntry, PreviewResult, ConfirmResult } from '../services/apiService';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -18,23 +18,40 @@ interface LayoutProps {
 export function Layout({ children, currentView, onChangeView, user, sessions, activeSessionId, onNewChat, onSelectSession, onDeleteSession }: LayoutProps): React.ReactElement {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    if (uploadStatus !== 'uploading') return;
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) { clearInterval(interval); setUploadStatus('success'); return 100; }
-        return prev + 10;
-      });
-    }, 300);
-    return () => clearInterval(interval);
-  }, [uploadStatus]);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'preview' | 'confirming' | 'success' | 'error'>('idle');
+  const [previewData, setPreviewData] = useState<PreviewResult | null>(null);
+  const [importResult, setImportResult] = useState<ConfirmResult | null>(null);
+  const [importError, setImportError] = useState('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   function handleCloseModal(): void {
     setIsImportModalOpen(false);
-    setTimeout(() => { setUploadStatus('idle'); setProgress(0); }, 300);
+    setTimeout(() => { setUploadStatus('idle'); setPreviewData(null); setImportResult(null); setImportError(''); }, 300);
+  }
+
+  async function handleFileUpload(file: File) {
+    setUploadStatus('uploading');
+    try {
+      const result = await previewImport(file);
+      setPreviewData(result);
+      setUploadStatus('preview');
+    } catch (e: any) {
+      setImportError(e.message || '解析失败');
+      setUploadStatus('error');
+    }
+  }
+
+  async function handleConfirmImport() {
+    if (!previewData?.token) return;
+    setUploadStatus('confirming');
+    try {
+      const result = await confirmImport(previewData.token);
+      setImportResult(result);
+      setUploadStatus('success');
+    } catch (e: any) {
+      setImportError(e.message || '导入失败');
+      setUploadStatus('error');
+    }
   }
 
   return (
@@ -129,20 +146,22 @@ export function Layout({ children, currentView, onChangeView, user, sessions, ac
       {/* Import Modal */}
       {isImportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+          <div className={`bg-white rounded-2xl shadow-xl w-full overflow-hidden animate-scale-in ${uploadStatus === 'preview' ? 'max-w-3xl' : 'max-w-md'}`}>
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900">导入团队历史日报</h3>
               <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={20} /></button>
             </div>
 
             <div className="p-6">
+              <input ref={fileInputRef} type="file" accept=".docx" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ''; }} />
               {uploadStatus === 'idle' && (
-                <div onClick={() => setUploadStatus('uploading')} className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center text-center hover:border-gray-500 transition-all cursor-pointer group">
+                <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center text-center hover:border-gray-500 transition-all cursor-pointer group">
                   <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-4 group-hover:bg-gray-200 transition-colors">
                     <FileUp className="text-gray-500" size={24} />
                   </div>
-                  <p className="text-sm font-medium text-gray-900 mb-1">点击或拖拽上传文件</p>
-                  <p className="text-xs text-gray-500">支持 .xlsx, .csv, .pdf 格式 (最大 20MB)</p>
+                  <p className="text-sm font-medium text-gray-900 mb-1">点击上传日报文档</p>
+                  <p className="text-xs text-gray-500">支持 .docx 格式</p>
                 </div>
               )}
               {uploadStatus === 'uploading' && (
@@ -152,28 +171,92 @@ export function Layout({ children, currentView, onChangeView, user, sessions, ac
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
-                    <span className="absolute text-xs font-bold text-gray-600">{progress}%</span>
                   </div>
-                  <p className="text-sm text-gray-600 font-medium">正在解析历史数据...</p>
+                  <p className="text-sm text-gray-600 font-medium">正在解析文档，AI 提取中...</p>
                 </div>
               )}
-              {uploadStatus === 'success' && (
+              {uploadStatus === 'preview' && previewData && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 text-sm text-gray-600">
+                    <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded-md font-medium">{previewData.entries.length} 条记录</span>
+                    <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md">{new Set(previewData.entries.map(e => e.date)).size} 天</span>
+                    <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-md">{new Set(previewData.entries.map(e => e.name)).size} 人</span>
+                  </div>
+                  {previewData.unmatched_members.length > 0 && (
+                    <div className="text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                      ⚠ 未匹配成员（将跳过）：{previewData.unmatched_members.join('、')}
+                    </div>
+                  )}
+                  <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-gray-500 font-medium">日期</th>
+                          <th className="px-3 py-2 text-left text-gray-500 font-medium">成员</th>
+                          <th className="px-3 py-2 text-left text-gray-500 font-medium">工作内容</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {previewData.entries.map((e, i) => (
+                          <tr key={i} className="hover:bg-gray-50">
+                            <td className="px-3 py-1.5 text-gray-600 whitespace-nowrap">{e.date}</td>
+                            <td className="px-3 py-1.5 text-gray-900 whitespace-nowrap">{e.name}</td>
+                            <td className="px-3 py-1.5 text-gray-600 break-all">{e.content}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {uploadStatus === 'confirming' && (
+                <div className="py-8 text-center space-y-4">
+                  <div className="w-16 h-16 mx-auto relative flex items-center justify-center">
+                    <svg className="animate-spin w-full h-full text-gray-200" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-gray-600 font-medium">正在写入数据库并同步至 MOI...</p>
+                  </div>
+                </div>
+              )}
+              {uploadStatus === 'success' && importResult && (
                 <div className="py-6 text-center space-y-3">
                   <div className="w-14 h-14 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-2">
                     <CheckCircle2 size={32} />
                   </div>
-                  <h4 className="text-lg font-semibold text-gray-900">导入成功</h4>
-                  <p className="text-sm text-gray-500 max-w-xs mx-auto">已成功导入历史日报数据。AI 助手现在可以回答关于这些数据的问题了。</p>
+                  <h4 className="text-lg font-semibold text-gray-900">导入完成</h4>
+                  <div className="text-sm text-gray-500 space-y-1">
+                    <p>新增 {importResult.imported} 条，覆盖 {importResult.merged} 条，跳过 {importResult.skipped} 条</p>
+                    <p className="text-xs text-gray-400">数据已同步至 MOI</p>
+                    {importResult.skipped_members?.length > 0 && (
+                      <p className="text-xs text-gray-400">未匹配成员：{importResult.skipped_members.join('、')}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {uploadStatus === 'error' && (
+                <div className="py-6 text-center space-y-3">
+                  <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <X size={32} />
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-900">操作失败</h4>
+                  <p className="text-sm text-gray-500">{importError}</p>
                 </div>
               )}
             </div>
 
             <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
-              {uploadStatus === 'success' ? (
-                <button onClick={handleCloseModal} className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-black transition-colors">完成</button>
-              ) : (
+              {uploadStatus === 'preview' ? (<>
                 <button onClick={handleCloseModal} className="px-4 py-2 text-gray-600 text-sm font-medium hover:bg-gray-200 rounded-lg transition-colors">取消</button>
-              )}
+                <button onClick={handleConfirmImport} className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-black transition-colors">确认导入</button>
+              </>) : (uploadStatus === 'success' || uploadStatus === 'error') ? (
+                <button onClick={handleCloseModal} className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-black transition-colors">完成</button>
+              ) : uploadStatus === 'idle' ? (
+                <button onClick={handleCloseModal} className="px-4 py-2 text-gray-600 text-sm font-medium hover:bg-gray-200 rounded-lg transition-colors">取消</button>
+              ) : null}
             </div>
           </div>
         </div>

@@ -290,6 +290,7 @@ func (h *ChatHandler) streamQueryCapture(ctx context.Context, sse *sseWriter, qu
 
 	var answer strings.Builder
 	var steps []string
+	queryStart := time.Now()
 	// Data Asking 用独立 session，不共用聊天 session（避免 agent 内部消息污染聊天历史）
 	if err := h.ai.StreamQueryAnswer(ctx, question, "", func(t string) {
 		answer.WriteString(t)
@@ -329,7 +330,10 @@ func (h *ChatHandler) streamQueryCapture(ctx context.Context, sse *sseWriter, qu
 
 	cfgJSON := ""
 	if len(steps) > 0 {
-		cfg, _ := json.Marshal(map[string]interface{}{"thinkingSteps": steps})
+		cfg, _ := json.Marshal(map[string]interface{}{
+			"thinkingSteps":   steps,
+			"thinkingElapsed": time.Since(queryStart).Milliseconds(),
+		})
 		cfgJSON = string(cfg)
 	}
 	return answer.String(), cfgJSON

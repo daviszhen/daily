@@ -35,4 +35,5 @@ build:
 	@echo "✅ Binary: bin/smart-daily"
 
 clean:
-	rm -rf bin/ server/cmd/server/dist/ exports/
+	rm -rf bin/ server/cmd/server/dist/ exports/ .pid
+	rm -rf server/logs/ logs/
