@@ -215,7 +215,9 @@ export async function loadSessionMessages(sessionId: number): Promise<Message[]>
     if (m.role === 'user' && m.content && m.content.includes('（注：提问者是')) continue;
     const config = m.config ? tryParse(m.config) : {};
     if (m.role === 'user') {
-      messages.push({ id: String(m.id), role: 'user', content: m.content, timestamp: new Date(m.created_at * 1000) });
+      const userCfg = m.config ? tryParse(m.config) : {};
+      messages.push({ id: String(m.id), role: 'user', content: m.content, timestamp: new Date(m.created_at * 1000),
+        metadata: userCfg.mode ? { mode: userCfg.mode } : undefined });
     } else {
       messages.push({
         id: String(m.id), role: 'assistant', content: m.content || m.response || '',

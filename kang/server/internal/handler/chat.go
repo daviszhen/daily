@@ -88,7 +88,7 @@ func (h *ChatHandler) Chat(c *gin.Context) {
 	// Save confirm messages to session
 	if req.SessionID != nil {
 		cfgJSON, _ := json.Marshal(map[string]interface{}{"type": "summary_confirm", "summary": mergedSummary, "risks": p.Risks})
-		h.saveMessages(c.GetString("user_name"), req.SessionID, "确认提交", "日报已提交成功！", string(cfgJSON))
+		h.saveMessages(c.GetString("user_name"), req.SessionID, "确认提交", "日报已提交成功！", string(cfgJSON), req.Mode)
 	}
 }
 
@@ -112,13 +112,17 @@ func (s *sseWriter) done() {
 }
 
 // saveMessages persists user input + assistant reply to MOI session (fire-and-forget).
-func (h *ChatHandler) saveMessages(userName string, sessionID *int64, userText, assistantText, configJSON string) {
+func (h *ChatHandler) saveMessages(userName string, sessionID *int64, userText, assistantText, configJSON, mode string) {
 	if h.session == nil || sessionID == nil {
 		return
 	}
 	go func() {
 		ctx := context.Background()
-		h.session.SaveMessage(ctx, userName, *sessionID, "user", userText, "")
+		userCfg := ""
+		if mode != "" {
+			userCfg = `{"mode":"` + mode + `"}`
+		}
+		h.session.SaveMessage(ctx, userName, *sessionID, "user", userText, userCfg)
 		h.session.SaveMessage(ctx, userName, *sessionID, "assistant", assistantText, configJSON)
 	}()
 }
@@ -142,59 +146,40 @@ func (h *ChatHandler) ChatStream(c *gin.Context) {
 	switch req.Mode {
 	case "report", "supplement":
 		logger.Info("chat.stream", "uid", uid, "name", name, "mode", req.Mode, "text", req.Text, "date", req.Date)
-		// 模式验证：检测输入是否匹配当前模式
-		intent, _ := h.ai.ClassifyIntent(ctx, req.Text, nil) // 无历史，纯看当前输入
+		intent, _ := h.ai.ClassifyIntent(ctx, req.Text, nil)
 		if intent == "query" {
 			sse.token("这看起来是个数据查询，建议切换到「查询团队动态」模式。\n如果确实是在描述工作内容，请换个方式表述。")
 			sse.done()
-			h.saveMessages(name, req.SessionID, req.Text, "这看起来是个数据查询，建议切换到「查询团队动态」模式。\n如果确实是在描述工作内容，请换个方式表述。", "")
+			h.saveMessages(name, req.SessionID, req.Text, "这看起来是个数据查询，建议切换到「查询团队动态」模式。\n如果确实是在描述工作内容，请换个方式表述。", "", req.Mode)
 			return
 		}
 		reply, cfg := h.streamReportCapture(ctx, sse, uid, req)
-		h.saveMessages(name, req.SessionID, req.Text, reply, cfg)
+		h.saveMessages(name, req.SessionID, req.Text, reply, cfg, req.Mode)
 	case "query":
 		logger.Info("chat.stream", "uid", uid, "name", name, "mode", "query", "question", req.Text)
-		// 模式验证：检测输入是否匹配当前模式
 		intent, _ := h.ai.ClassifyIntent(ctx, req.Text, nil)
 		if intent == "report" {
 			sse.token("这看起来是在汇报工作内容，建议切换到「汇报今日工作」模式。\n如果确实是在查询数据，请换个方式提问。")
 			sse.done()
-			h.saveMessages(name, req.SessionID, req.Text, "这看起来是在汇报工作内容，建议切换到「汇报今日工作」模式。\n如果确实是在查询数据，请换个方式提问。", "")
+			h.saveMessages(name, req.SessionID, req.Text, "这看起来是在汇报工作内容，建议切换到「汇报今日工作」模式。\n如果确实是在查询数据，请换个方式提问。", "", req.Mode)
 			return
 		}
 		question := injectUserIdentity(req.Text, name)
 		reply, cfg := h.streamQueryCapture(ctx, sse, question, req)
-		h.saveMessages(name, req.SessionID, req.Text, reply, cfg)
+		h.saveMessages(name, req.SessionID, req.Text, reply, cfg, req.Mode)
 	case "summary":
 		logger.Info("chat.stream", "uid", uid, "name", name, "mode", "summary")
 		h.streamSummary(ctx, sse, uid, name, req.Text)
 	default:
-		// 无模式：检测意图 → 自动切换 + 执行，或闲聊
+		// 无模式：直接闲聊（StreamChat prompt 内含引导逻辑）
 		history := buildHistory(req, 5)
-		intent, _ := h.ai.ClassifyIntent(ctx, req.Text, history)
-		logger.Info("chat.stream", "uid", uid, "name", name, "mode", "auto", "intent", intent, "text", req.Text)
-		switch intent {
-		case "report":
-			// 自动切换到 report 模式 + 执行
-			sse.event("mode_switch", map[string]string{"mode": "report"})
-			req.Mode = "report"
-			reply, cfg := h.streamReportCapture(ctx, sse, uid, req)
-			h.saveMessages(name, req.SessionID, req.Text, reply, cfg)
-		case "query":
-			// 自动切换到 query 模式 + 执行
-			sse.event("mode_switch", map[string]string{"mode": "query"})
-			question := injectUserIdentity(req.Text, name)
-			reply, cfg := h.streamQueryCapture(ctx, sse, question, req)
-			h.saveMessages(name, req.SessionID, req.Text, reply, cfg)
-		default:
-			// 闲聊
-			var reply strings.Builder
-			if err := h.ai.StreamChat(ctx, req.Text, history, func(t string) { reply.WriteString(t); sse.token(t) }); err != nil {
-				sse.token("抱歉，服务暂时不可用，请稍后再试。")
-			}
-			sse.done()
-			h.saveMessages(name, req.SessionID, req.Text, reply.String(), "")
+		logger.Info("chat.stream", "uid", uid, "name", name, "mode", "auto", "text", req.Text)
+		var reply strings.Builder
+		if err := h.ai.StreamChat(ctx, req.Text, history, func(t string) { reply.WriteString(t); sse.token(t) }); err != nil {
+			sse.token("抱歉，服务暂时不可用，请稍后再试。")
 		}
+		sse.done()
+		h.saveMessages(name, req.SessionID, req.Text, reply.String(), "", "")
 	}
 }
 

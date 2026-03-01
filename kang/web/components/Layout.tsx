@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, MessageSquare, PieChart, Menu, X, Bell, UploadCloud, FileUp, CheckCircle2, LogOut, Trash2, Eye } from 'lucide-react';
+import { LayoutDashboard, MessageSquare, PieChart, Menu, X, Bell, UploadCloud, FileUp, CheckCircle2, LogOut, Trash2, Eye, PlusCircle } from 'lucide-react';
 import { ViewMode, User } from '../types';
 import { MO_LOGO, logout, SessionInfo, previewImport, confirmImport, PreviewEntry, PreviewResult, ConfirmResult } from '../services/apiService';
 
@@ -57,16 +57,17 @@ export function Layout({ children, currentView, onChangeView, user, sessions, ac
   return (
     <div className="flex h-screen bg-white overflow-hidden">
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 w-full h-16 bg-white border-b border-gray-100 z-50 flex items-center justify-between px-4">
-        <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden">
+      <div className="md:hidden fixed top-0 w-full h-16 bg-white border-b border-gray-100 z-50 flex items-center px-4">
+        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-gray-500">
+          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+        <div className="flex-1 flex items-center justify-center space-x-2">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center overflow-hidden">
             <img src={MO_LOGO} alt="MOI" className="w-full h-full object-contain" />
           </div>
           <span className="font-semibold text-gray-900">MOI 智能日报</span>
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-gray-500">
-          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="w-10" /> {/* 占位，让标题居中 */}
       </div>
 
       {/* Sidebar */}
@@ -93,10 +94,10 @@ export function Layout({ children, currentView, onChangeView, user, sessions, ac
               <div className="flex-1 overflow-y-auto space-y-0.5 px-1">
                 {sessions.map(s => (
                   <div key={s.id} className={`group flex items-center px-3 py-2.5 rounded-lg cursor-pointer text-sm transition-colors ${s.id === activeSessionId ? 'bg-gray-200 text-gray-900 font-medium' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
-                    onClick={() => onSelectSession(s.id)}>
+                    onClick={() => { onSelectSession(s.id); setIsMobileMenuOpen(false); }}>
                     <MessageSquare size={15} className="mr-2.5 flex-shrink-0 text-gray-500" />
                     <span className="flex-1 truncate">{s.title || '未命名对话'}</span>
-                    <button className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity"
+                    <button className="opacity-100 md:opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity"
                       onClick={e => { e.stopPropagation(); onDeleteSession(s.id); }}>
                       <Trash2 size={14} />
                     </button>

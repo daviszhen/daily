@@ -48,6 +48,13 @@ function MarkdownContent({ text }: { text: string }): React.ReactElement {
   return <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{text}</ReactMarkdown>;
 }
 
+const MODE_LABELS: Record<string, { icon: string; text: string; color: string }> = {
+  report:     { icon: '📝', text: '汇报', color: 'bg-indigo-50 text-indigo-600 border-indigo-200' },
+  supplement: { icon: '📝', text: '补报', color: 'bg-indigo-50 text-indigo-600 border-indigo-200' },
+  query:      { icon: '🔍', text: '查询', color: 'bg-blue-50 text-blue-600 border-blue-200' },
+  summary:    { icon: '📊', text: '周报', color: 'bg-amber-50 text-amber-600 border-amber-200' },
+};
+
 function formatElapsed(ms: number): string {
   const sec = Math.floor(ms / 1000);
   if (sec < 60) return `${sec}秒`;
@@ -67,6 +74,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeSessionRef = useRef<number | null>(sessionId);
   const msgCacheRef = useRef<Map<number | null, Message[]>>(new Map());
+  const justCreatedRef = useRef(false);
 
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', role: 'assistant',
@@ -109,7 +117,8 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
     activeSessionRef.current = sessionId;
 
     // 从 null（新建）切到有 ID 的 session：迁移缓存，不重置消息
-    if (prevSession === null && sessionId !== null) {
+    if (prevSession === null && sessionId !== null && justCreatedRef.current) {
+      justCreatedRef.current = false;
       setMessages(prev => {
         msgCacheRef.current.set(sessionId, prev);
         return prev;
@@ -173,6 +182,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
       try {
         const sess = await createSession(new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//g, '-'));
         sid = sess.id;
+        justCreatedRef.current = true;
         onSessionCreated(sid);
       } catch (e) {
         console.error('create session failed', e);
@@ -202,7 +212,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
 
       // Streaming: add placeholder message
       const streamId = (Date.now() + 1).toString();
-      setMessages(prev => [...prev, { id: streamId, role: 'assistant', content: '', type: 'text', timestamp: new Date() }]);
+      setMessages(prev => [...prev, { id: streamId, role: 'assistant', content: '', type: 'text', timestamp: new Date(), metadata: { mode: activeMode || undefined } }]);
       setThinkingSteps([]);
       setThinkingStartTime(null);
       setThinkingElapsed(0);
@@ -235,6 +245,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
         onModeSwitch(mode) {
           if (!isActive()) return;
           setActiveMode(mode as ChatMode);
+          setMessages(prev => prev.map(m => m.id === streamId ? { ...m, metadata: { ...m.metadata, mode } } : m));
         },
       });
 
@@ -283,7 +294,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
       case 'query': return '输入想查询的同事姓名、项目或关键词...';
       case 'summary': return '输入周报的时间范围或重点关注内容...';
       case 'supplement': return selectedDate ? '输入该日的工作内容...' : '请先选择补填日期...';
-      default: return '输入今日工作进展...';
+      default: return '选择上方功能，或随便聊聊...';
     }
   }
 
@@ -372,7 +383,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
           <img src={MO_LOGO} alt="MOI" className="w-12 h-12 object-contain" />
         </div>
         <h2 className="text-xl font-semibold text-gray-900 mb-1">你好，{user.name}</h2>
-        <p className="text-gray-400 text-sm mb-8">选择功能开始，或直接输入工作内容</p>
+        <p className="text-gray-400 text-sm mb-8">选择功能开始，或随便聊聊</p>
         <div className="w-full">{inputArea}</div>
       </div>
     );
@@ -395,7 +406,16 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
                   </div>
                 )}
 
-                <div className={`space-y-2 ${isUser ? 'text-right' : 'text-left'}`}>
+                <div className={`space-y-1 ${isUser ? 'text-right' : 'text-left'}`}>
+                  {/* Mode label pill - above bubble */}
+                  {isUser && (() => {
+                    const ml = MODE_LABELS[msg.metadata?.mode as string];
+                    return ml ? (
+                      <div className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${ml.color}`}>
+                        <span className="mr-1 text-[10px]">{ml.icon}</span>{ml.text}
+                      </div>
+                    ) : null;
+                  })()}
                   {msg.type !== 'summary_confirm' && (
                   <div className={`px-5 py-3 rounded-2xl text-base leading-relaxed shadow-sm ${
                     isUser ? 'bg-gray-900 text-white rounded-tr-sm' : 'bg-white border border-gray-100 text-gray-800 rounded-tl-sm'
