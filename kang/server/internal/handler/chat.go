@@ -361,6 +361,7 @@ func (h *ChatHandler) streamSummary(ctx context.Context, sse *sseWriter, uid int
 			logger.Warn("extract date range fallback", "err", err)
 		} else {
 			start, end = dr.Start, dr.End
+			logger.Info("chat.summary.dateRange", "input", text, "start", start, "end", end)
 		}
 	}
 

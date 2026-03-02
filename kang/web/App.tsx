@@ -44,7 +44,7 @@ function LoginPage({ onLogin }: { onLogin: (user: User) => void }): React.ReactE
             {loading ? '登录中...' : '登录'}
           </button>
         </form>
-        <p className="text-center text-xs text-gray-400 mt-6">测试账号：chenalei / 123456</p>
+        <p className="text-center text-xs text-gray-400 mt-6">测试账号：test / 123456</p>
       </div>
     </div>
   );

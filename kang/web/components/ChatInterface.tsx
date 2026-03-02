@@ -132,6 +132,8 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
     }
 
     if (!sessionId) {
+      setActiveMode(null);
+      setIsLoading(false);
       setMessages([{
         id: 'welcome', role: 'assistant',
         content: `你好，${user.name}。我是你的 AI 日报助手。请选择下方的功能按钮。`,
