@@ -32,10 +32,9 @@ go.work.sum
 # .vscode/
 
 # Project specific
-kang/bin/
-kang/server/cmd/server/dist/
-kang/logs/
-kang/web/node_modules/
-kang/web/dist/
-kang/.env
-kang/.pid
+bin/
+server/cmd/server/dist/
+logs/
+web/node_modules/
+web/dist/
+.pid

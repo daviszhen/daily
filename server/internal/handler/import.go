@@ -127,9 +127,9 @@ func (h *ImportHandler) Preview(c *gin.Context) {
 
 	logger.Info("import preview: done", "token", token, "entries", len(allEntries), "unmatched", len(unmatched))
 	c.JSON(http.StatusOK, gin.H{
-		"token":              token,
-		"entries":            allEntries,
-		"unmatched_members":  unmatched,
+		"token":             token,
+		"entries":           allEntries,
+		"unmatched_members": unmatched,
 	})
 }
 
@@ -181,7 +181,10 @@ func (h *ImportHandler) Confirm(c *gin.Context) {
 	}
 
 	// Count existing for merged/imported stats
-	type key struct{ mid int; date string }
+	type key struct {
+		mid  int
+		date string
+	}
 	existingKeys := map[key]bool{}
 	if len(valid) > 0 {
 		var existing []model.DailyEntry

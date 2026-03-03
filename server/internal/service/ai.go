@@ -477,7 +477,20 @@ func (s *AIService) MergeDailySummary(ctx context.Context, entries []string) (st
 
 // StreamWeeklySummary 流式生成周报，返回完整内容用于保存文件
 func (s *AIService) StreamWeeklySummary(ctx context.Context, userName, data string, flush func(string)) (string, error) {
-	system := `根据日报数据生成 Markdown 周报，包含：# 周报 - {姓名}、## 本周重点、## 进展详情、## 风险与阻塞、## 下周计划。`
+	system := `根据日报数据生成 Markdown 周报。
+
+输入格式为：[日期] 工作内容，每行一条记录。
+
+格式要求：
+# 周报 - {姓名}
+## 本周重点
+（提炼本周核心工作，2-4条）
+## 进展详情
+（严格按日期分组，输入中出现的每个日期都必须单独列出，不得合并或遗漏任何日期）
+## 风险与阻塞
+（仅列出日报原文中明确提到的风险或阻塞，若无则省略此章节）
+## 下周计划
+（仅列出日报原文中明确提到的下周/后续计划，若无则省略此章节，禁止自行推断或编造）`
 	prompt := fmt.Sprintf("姓名：%s\n日报数据：\n%s", userName, data)
 	return s.stream(ctx, system, prompt, flush)
 }
@@ -489,16 +502,16 @@ type DateRange struct {
 }
 
 // ExtractDateRange 从用户输入中提取日期范围，默认最近7天
-func (s *AIService) ExtractDateRange(ctx context.Context, text, today, weekday string) (*DateRange, error) {
-	system := fmt.Sprintf(`你是日期解析助手。今天是 %s（%s）。
+func (s *AIService) ExtractDateRange(ctx context.Context, text, today, weekday, monday string) (*DateRange, error) {
+	system := fmt.Sprintf(`你是日期解析助手。今天是 %s（%s），本周一是 %s。
 用户会用自然语言描述一个时间范围，请提取为精确日期。
 规则：
-- "本周"指本周一到今天
+- "本周"指 %s 到今天（%s）
 - "上周"指上周一到上周日
 - "最近一周"指过去7天
 - "前两周"指过去14天
 - 如果用户没有明确时间，默认最近7天
-只输出 JSON：{"start":"YYYY-MM-DD","end":"YYYY-MM-DD"}`, today, weekday)
+只输出 JSON：{"start":"YYYY-MM-DD","end":"YYYY-MM-DD"}`, today, weekday, monday, monday, today)
 	result, err := s.doChatWithModel(ctx, s.fastModel, system, text, false, nil)
 	if err != nil {
 		return nil, err

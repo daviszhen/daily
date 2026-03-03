@@ -294,3 +294,81 @@ func TestReportValidationReject(t *testing.T) {
 		t.Log("OK: validation rejected with guidance")
 	}
 }
+
+func TestSummaryModeThisWeek(t *testing.T) {
+	b := newBrowser(t, 90*time.Second)
+	defer b.close()
+	b.login("kuaiweikang", "123456")
+
+	b.clickButton("生成周报")
+	b.sendMessage("本周周报")
+	body := b.waitForReply(30 * time.Second)
+
+	if !strings.Contains(body, "周报") {
+		t.Fatal("summary mode: no 周报 in response")
+	}
+	if !strings.Contains(body, "本周重点") {
+		t.Fatal("summary mode: missing 本周重点 section")
+	}
+	if !strings.Contains(body, "进展详情") {
+		t.Fatal("summary mode: missing 进展详情 section")
+	}
+	t.Log("OK: summary mode generated weekly report")
+}
+
+func TestSummaryModeLastWeek(t *testing.T) {
+	b := newBrowser(t, 90*time.Second)
+	defer b.close()
+	b.login("kuaiweikang", "123456")
+
+	b.clickButton("生成周报")
+	b.sendMessage("上周周报")
+	body := b.waitForReply(30 * time.Second)
+
+	// Either a report or a friendly "no data" message
+	if strings.Contains(body, "暂无日报记录") {
+		t.Log("OK: no data last week, friendly message shown")
+	} else if strings.Contains(body, "周报") {
+		t.Log("OK: last week report generated")
+	} else {
+		t.Fatal("summary mode: unexpected response for last week")
+	}
+}
+
+func TestSummaryModeNoData(t *testing.T) {
+	b := newBrowser(t, 60*time.Second)
+	defer b.close()
+	b.login("kuaiweikang", "123456")
+
+	b.clickButton("生成周报")
+	b.sendMessage("2020年第一周的周报")
+	body := b.waitForReply(20 * time.Second)
+
+	if !strings.Contains(body, "暂无日报记录") {
+		t.Fatal("summary mode: should show no-data message for empty range")
+	}
+	t.Log("OK: empty date range shows friendly no-data message")
+}
+
+func TestSummaryModeDownload(t *testing.T) {
+	b := newBrowser(t, 90*time.Second)
+	defer b.close()
+	b.login("kuaiweikang", "123456")
+
+	b.clickButton("生成周报")
+	b.sendMessage("本周周报")
+	b.waitForReply(30 * time.Second)
+
+	// Check download card appears
+	downloadCard := b.eval(`(function(){
+		var els = document.querySelectorAll('p');
+		for (var i = 0; i < els.length; i++) {
+			if (els[i].textContent.includes('点击下载生成的文档')) return 'yes';
+		}
+		return 'no';
+	})()`)
+	if downloadCard != "yes" {
+		t.Fatal("summary mode: download card not shown after report generation")
+	}
+	t.Log("OK: download card shown after report generation")
+}

@@ -350,13 +350,19 @@ func (h *ChatHandler) streamQueryCapture(ctx context.Context, sse *sseWriter, qu
 }
 
 func (h *ChatHandler) streamSummary(ctx context.Context, sse *sseWriter, uid int, name string, text string) {
-	today := time.Now().Format("2006-01-02")
-	weekday := [...]string{"日", "一", "二", "三", "四", "五", "六"}[time.Now().Weekday()]
+	now := time.Now()
+	today := now.Format("2006-01-02")
+	weekday := [...]string{"日", "一", "二", "三", "四", "五", "六"}[now.Weekday()]
+	weekdayNum := int(now.Weekday())
+	if weekdayNum == 0 {
+		weekdayNum = 7
+	}
+	monday := now.AddDate(0, 0, -(weekdayNum - 1)).Format("2006-01-02")
 
 	// 有用户输入则提取日期范围，否则默认最近7天
 	var start, end string
 	if strings.TrimSpace(text) != "" {
-		dr, err := h.ai.ExtractDateRange(ctx, text, today, "星期"+weekday)
+		dr, err := h.ai.ExtractDateRange(ctx, text, today, "星期"+weekday, monday)
 		if err != nil {
 			logger.Warn("extract date range fallback", "err", err)
 		} else {
