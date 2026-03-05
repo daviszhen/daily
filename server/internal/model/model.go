@@ -32,10 +32,11 @@ type LoginResponse struct {
 }
 
 type User struct {
-	ID     int    `json:"id"`
-	Name   string `json:"name"`
-	Avatar string `json:"avatar"`
-	Role   string `json:"role"`
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	Avatar  string `json:"avatar"`
+	Role    string `json:"role"`
+	IsAdmin bool   `json:"is_admin"`
 }
 
 type PendingReport struct {

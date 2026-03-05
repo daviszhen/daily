@@ -26,40 +26,7 @@ func initCatalog(ctx context.Context, client *sdk.RawClient, catalogID sdk.Catal
 	logger.Info("catalog: database created", "id", dbResp.DatabaseID)
 
 	// 2. Create tables
-	tables := []struct {
-		name    string
-		columns []sdk.Column
-	}{
-		{"members", []sdk.Column{
-			{Name: "id", Type: "INT", IsPk: true, Comment: "主键"},
-			{Name: "username", Type: "VARCHAR(50)", Comment: "登录用户名"},
-			{Name: "password", Type: "VARCHAR(255)", Comment: "密码哈希"},
-			{Name: "name", Type: "VARCHAR(50)", Comment: "团队成员真实姓名"},
-			{Name: "avatar", Type: "VARCHAR(255)", Comment: "头像URL"},
-			{Name: "role", Type: "VARCHAR(50)", Comment: "职位角色，如开发工程师、测试"},
-			{Name: "team", Type: "VARCHAR(50)", Comment: "所属团队"},
-		}},
-		{"daily_entries", []sdk.Column{
-			{Name: "id", Type: "INT", IsPk: true, Comment: "主键"},
-			{Name: "member_id", Type: "INT", Comment: "关联members.id"},
-			{Name: "daily_date", Type: "DATE", Comment: "日报所属日期"},
-			{Name: "content", Type: "TEXT", Comment: "用户提交的原始工作内容"},
-			{Name: "summary", Type: "TEXT", Comment: "AI生成的工作摘要"},
-			{Name: "source", Type: "VARCHAR(20)", Comment: "提交来源：chat"},
-			{Name: "created_at", Type: "DATETIME", Comment: "记录创建时间"},
-		}},
-		{"daily_summaries", []sdk.Column{
-			{Name: "id", Type: "INT", IsPk: true, Comment: "主键"},
-			{Name: "member_id", Type: "INT", Comment: "关联members.id"},
-			{Name: "daily_date", Type: "DATE", Comment: "日报所属日期"},
-			{Name: "summary", Type: "TEXT", Comment: "AI生成的工作摘要"},
-			{Name: "status", Type: "TEXT", Comment: "工作状态"},
-			{Name: "risk", Type: "TEXT", Comment: "AI检测到的风险项"},
-			{Name: "blocker", Type: "TEXT", Comment: "阻塞问题"},
-		}},
-	}
-
-	for _, t := range tables {
+	for _, t := range catalogTables {
 		resp, err := client.CreateTable(ctx, &sdk.TableCreateRequest{
 			DatabaseID: dbResp.DatabaseID,
 			Name:       t.name,
@@ -77,6 +44,65 @@ func initCatalog(ctx context.Context, client *sdk.RawClient, catalogID sdk.Catal
 	}
 
 	return dbResp.DatabaseID, nil
+}
+
+// catalogTables defines all tables in MOI Catalog.
+// Keep in sync with GORM models in model/entity.go.
+var catalogTables = []struct {
+	name    string
+	columns []sdk.Column
+}{
+	{"members", []sdk.Column{
+		{Name: "id", Type: "INT", IsPk: true, Comment: "主键"},
+		{Name: "username", Type: "VARCHAR(50)", Comment: "登录用户名"},
+		{Name: "password", Type: "VARCHAR(255)", Comment: "密码哈希"},
+		{Name: "name", Type: "VARCHAR(50)", Comment: "团队成员真实姓名"},
+		{Name: "avatar", Type: "VARCHAR(255)", Comment: "头像URL"},
+		{Name: "role", Type: "VARCHAR(50)", Comment: "职位角色"},
+		{Name: "team", Type: "VARCHAR(50)", Comment: "所属团队名称"},
+		{Name: "team_id", Type: "INT", Comment: "所属团队ID,关联teams.id"},
+		{Name: "status", Type: "VARCHAR(20)", Comment: "状态:active/deleted"},
+		{Name: "is_admin", Type: "BOOL", Comment: "是否管理员"},
+	}},
+	{"teams", []sdk.Column{
+		{Name: "id", Type: "INT", IsPk: true, Comment: "主键"},
+		{Name: "name", Type: "VARCHAR(50)", Comment: "团队名称"},
+	}},
+	{"daily_entries", []sdk.Column{
+		{Name: "id", Type: "INT", IsPk: true, Comment: "主键"},
+		{Name: "member_id", Type: "INT", Comment: "关联members.id"},
+		{Name: "daily_date", Type: "DATE", Comment: "日报所属日期"},
+		{Name: "content", Type: "TEXT", Comment: "用户提交的原始工作内容"},
+		{Name: "summary", Type: "TEXT", Comment: "AI生成的工作摘要"},
+		{Name: "source", Type: "VARCHAR(20)", Comment: "提交来源:chat/import"},
+		{Name: "created_at", Type: "DATETIME", Comment: "记录创建时间"},
+	}},
+	{"daily_summaries", []sdk.Column{
+		{Name: "id", Type: "INT", IsPk: true, Comment: "主键"},
+		{Name: "member_id", Type: "INT", Comment: "关联members.id"},
+		{Name: "daily_date", Type: "DATE", Comment: "日报所属日期"},
+		{Name: "summary", Type: "TEXT", Comment: "AI生成的工作摘要"},
+		{Name: "status", Type: "TEXT", Comment: "工作状态"},
+		{Name: "risk", Type: "TEXT", Comment: "AI检测到的风险项"},
+		{Name: "blocker", Type: "TEXT", Comment: "阻塞问题"},
+	}},
+	{"topics", []sdk.Column{
+		{Name: "id", Type: "INT", IsPk: true, Comment: "主键"},
+		{Name: "name", Type: "VARCHAR(200)", Comment: "Topic名称"},
+		{Name: "description", Type: "TEXT", Comment: "描述"},
+		{Name: "status", Type: "VARCHAR(20)", Comment: "active/resolved"},
+		{Name: "created_at", Type: "DATETIME", Comment: "创建时间"},
+		{Name: "resolved_at", Type: "DATETIME", Comment: "解决时间"},
+	}},
+	{"topic_activities", []sdk.Column{
+		{Name: "id", Type: "INT", IsPk: true, Comment: "主键"},
+		{Name: "topic", Type: "VARCHAR(200)", Comment: "Topic名称"},
+		{Name: "member_id", Type: "INT", Comment: "成员ID"},
+		{Name: "member_name", Type: "VARCHAR(50)", Comment: "成员姓名"},
+		{Name: "daily_date", Type: "DATE", Comment: "日期"},
+		{Name: "content", Type: "TEXT", Comment: "工作内容"},
+		{Name: "entry_id", Type: "INT", Comment: "关联daily_entries.id"},
+	}},
 }
 
 func discoverDatabaseID(ctx context.Context, client *sdk.RawClient, catalogID sdk.CatalogID, dbName string) (sdk.DatabaseID, error) {

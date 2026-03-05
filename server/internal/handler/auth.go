@@ -33,13 +33,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	logger.Info("login.ok", "uid", m.ID, "name", m.Name)
 
 	token, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"uid":  m.ID,
-		"name": m.Name,
-		"exp":  time.Now().Add(7 * 24 * time.Hour).Unix(),
+		"uid":      m.ID,
+		"name":     m.Name,
+		"is_admin": m.IsAdmin,
+		"exp":      time.Now().Add(middleware.TokenTTL()).Unix(),
 	}).SignedString(middleware.JWTSecret)
 
 	c.JSON(http.StatusOK, model.LoginResponse{
 		Token: token,
-		User:  model.User{ID: m.ID, Name: m.Name, Avatar: m.Avatar, Role: m.Role},
+		User:  model.User{ID: m.ID, Name: m.Name, Avatar: m.Avatar, Role: m.Role, IsAdmin: m.IsAdmin},
 	})
 }

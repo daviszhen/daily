@@ -14,7 +14,7 @@ def get_cell_text(cell):
         text = ''.join(r.findtext(qn('w:t'), '') for r in runs)
         if text.strip():
             parts.append(text.strip())
-    return '\n'.join(parts)
+    return '; '.join(parts)
 
 def get_para_text(elem):
     """提取段落文本，避免重复"""

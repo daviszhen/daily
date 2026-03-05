@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"smart-daily/internal/logger"
 	"smart-daily/internal/model"
+	"smart-daily/internal/repository"
 	"smart-daily/internal/service"
 	"strings"
 	"sync"
@@ -18,15 +19,17 @@ import (
 )
 
 type ChatHandler struct {
-	ai      *service.AIService
-	daily   *service.DailyService
-	catalog *service.CatalogSync
-	session *service.SessionService
-	pending sync.Map
+	ai         *service.AIService
+	daily      *service.DailyService
+	catalog    *service.CatalogSync
+	session    *service.SessionService
+	topicRepo  *repository.TopicRepo
+	memberRepo *repository.MemberRepo
+	pending    sync.Map
 }
 
-func NewChatHandler(ai *service.AIService, daily *service.DailyService, catalog *service.CatalogSync) *ChatHandler {
-	return &ChatHandler{ai: ai, daily: daily, catalog: catalog}
+func NewChatHandler(ai *service.AIService, daily *service.DailyService, catalog *service.CatalogSync, topicRepo *repository.TopicRepo, memberRepo *repository.MemberRepo) *ChatHandler {
+	return &ChatHandler{ai: ai, daily: daily, catalog: catalog, topicRepo: topicRepo, memberRepo: memberRepo}
 }
 
 func (h *ChatHandler) SetSessionService(s *service.SessionService) { h.session = s }
@@ -82,6 +85,9 @@ func (h *ChatHandler) Chat(c *gin.Context) {
 	if h.catalog != nil {
 		h.catalog.SyncDailySummary(ctx, entryID, p.MemberID, date, p.Content, mergedSummary, risk)
 	}
+
+	// Extract topics async
+	go h.extractAndSaveTopics(p.MemberID, c.GetString("user_name"), date, mergedSummary, entryID)
 
 	c.JSON(http.StatusOK, model.ChatResponse{Content: "日报已提交成功！", Type: "text"})
 
@@ -371,7 +377,20 @@ func (h *ChatHandler) streamSummary(ctx context.Context, sse *sseWriter, uid int
 		}
 	}
 
-	data, err := h.daily.GetMemberDateRangeData(ctx, uid, start, end)
+	// Match target member name from message (e.g. "帮我生成彭振的周报")
+	targetUID, targetName := uid, name
+	if h.memberRepo != nil && strings.TrimSpace(text) != "" {
+		members, _ := h.memberRepo.ListActive(ctx)
+		for _, m := range members {
+			if m.ID != uid && strings.Contains(text, m.Name) {
+				targetUID, targetName = m.ID, m.Name
+				logger.Info("chat.summary.targetMember", "from", name, "target", targetName, "target_id", targetUID)
+				break
+			}
+		}
+	}
+
+	data, err := h.daily.GetMemberDateRangeData(ctx, targetUID, start, end)
 	if err != nil {
 		logger.Error("get data failed", "err", err)
 	}
@@ -381,8 +400,8 @@ func (h *ChatHandler) streamSummary(ctx context.Context, sse *sseWriter, uid int
 		return
 	}
 
-	logger.Info("chat.summary", "uid", uid, "start", start, "end", end, "dataLen", len(data))
-	md, err := h.ai.StreamWeeklySummary(ctx, name, data, sse.token)
+	logger.Info("chat.summary", "uid", targetUID, "name", targetName, "start", start, "end", end, "dataLen", len(data))
+	md, err := h.ai.StreamWeeklySummary(ctx, targetName, data, sse.token)
 	if err != nil {
 		logger.Error("stream summary failed", "err", err)
 		sse.token("抱歉，周报生成失败，请稍后重试。")
@@ -390,7 +409,7 @@ func (h *ChatHandler) streamSummary(ctx context.Context, sse *sseWriter, uid int
 		return
 	}
 
-	filename := fmt.Sprintf("周报_%s_%s.md", name, time.Now().Format("20060102"))
+	filename := fmt.Sprintf("周报_%s_%s.md", targetName, time.Now().Format("20060102"))
 	dir := filepath.Join(".", "exports")
 	os.MkdirAll(dir, 0755)
 	fpath := filepath.Join(dir, filename)
@@ -414,4 +433,22 @@ func (h *ChatHandler) DownloadFile(c *gin.Context) {
 	}
 	c.File(path)
 	defer os.Remove(path)
+}
+
+func (h *ChatHandler) extractAndSaveTopics(memberID int, memberName, date, content string, entryID int) {
+	ctx := context.Background()
+	existingTopics, _ := h.topicRepo.ListDistinctTopics(ctx)
+	topics, _ := h.ai.ExtractTopics(ctx, content, existingTopics)
+
+	h.topicRepo.DeleteByEntryID(ctx, entryID)
+	h.topicRepo.EnsureTopics(ctx, topics)
+	var items []model.TopicActivity
+	for _, t := range topics {
+		items = append(items, model.TopicActivity{
+			Topic: t, MemberID: memberID, MemberName: memberName,
+			DailyDate: date, Content: content, EntryID: entryID,
+		})
+	}
+	h.topicRepo.BatchCreate(ctx, items)
+	logger.Info("topics extracted", "entry_id", entryID, "topics", topics)
 }

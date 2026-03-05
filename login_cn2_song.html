@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>宋韵雅致</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500&family=Ma+Shan+Zheng&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Noto Sans SC', sans-serif; min-height: 100vh; background: #EFEBE0; display: flex; align-items: center; justify-content: center; }
+
+  .page { width: 100%; max-width: 960px; display: flex; margin: 40px; position: relative; }
+
+  /* 左侧 - 宣纸质感 */
+  .left { flex: 1; background: #F8F4EC; padding: 56px; display: flex; flex-direction: column; justify-content: space-between; position: relative; border: 1px solid #E0D8C8; }
+  /* 纸张纹理 */
+  .left::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(180,170,150,0.03) 3px, rgba(180,170,150,0.03) 4px); pointer-events: none; }
+
+  /* 右侧 */
+  .right { width: 380px; background: #F8F4EC; padding: 56px; display: flex; flex-direction: column; justify-content: center; border: 1px solid #E0D8C8; border-left: none; }
+
+  .logo-area { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; position: relative; z-index: 1; }
+  .logo-area img { height: 28px; opacity: 0.7; }
+  .logo-area span { font-size: 11px; color: #A09484; letter-spacing: 2px; }
+
+  /* 竖排标题 */
+  .title-area { position: relative; z-index: 1; flex: 1; display: flex; align-items: center; }
+  .v-title { font-family: 'Noto Serif SC', serif; writing-mode: vertical-rl; font-size: 64px; font-weight: 700; color: #3C3228; letter-spacing: 12px; line-height: 1.4; margin-right: 48px; }
+  .side-content { display: flex; flex-direction: column; justify-content: center; }
+  .side-content .desc { font-size: 14px; color: #8C7B6B; line-height: 2.2; margin-bottom: 32px; letter-spacing: 1px; }
+  .side-content .features { list-style: none; }
+  .side-content .features li { font-size: 13px; color: #A0917F; padding: 10px 0; border-bottom: 1px solid #E8E0D2; letter-spacing: 1px; }
+  .side-content .features li:first-child { border-top: 1px solid #E8E0D2; }
+
+  .copyright { font-size: 10px; color: #C4B8A4; position: relative; z-index: 1; letter-spacing: 1px; }
+
+  /* 印章装饰 - 玉玺回纹朱文 */
+  .stamp { position: absolute; bottom: 72px; right: 48px; z-index: 1; }
+
+  /* 右侧表单 */
+  .form-title { font-family: 'Noto Serif SC', serif; font-size: 24px; font-weight: 600; color: #3C3228; margin-bottom: 6px; letter-spacing: 2px; }
+  .form-sub { font-size: 12px; color: #A0917F; margin-bottom: 36px; letter-spacing: 1px; }
+
+  .field { margin-bottom: 24px; }
+  .field label { display: block; font-size: 11px; color: #8C7B6B; margin-bottom: 8px; letter-spacing: 2px; }
+  .field input { width: 100%; padding: 10px 0; border: none; border-bottom: 1px solid #DDD5C8; font-size: 14px; font-family: inherit; outline: none; background: transparent; color: #3C3228; transition: border-color 0.3s; }
+  .field input:focus { border-bottom-color: #8C7B6B; }
+  .field input::placeholder { color: #C4B8A4; font-size: 13px; }
+  .pwd-wrap { position: relative; }
+  .pwd-wrap input { padding-right: 32px; }
+  .eye-btn { position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #A0917F; font-size: 14px; }
+
+  .btn { width: 100%; padding: 14px; background: #3C3228; color: #F8F4EC; border: none; font-size: 13px; font-family: 'Noto Serif SC', serif; letter-spacing: 4px; cursor: pointer; transition: opacity 0.2s; margin-top: 4px; }
+  .btn:hover { opacity: 0.85; }
+
+  .footer-text { text-align: center; font-size: 10px; color: #C4B8A4; margin-top: 32px; line-height: 2.2; }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="left">
+      <div class="logo-area">
+        <img src="/mo-logo.png" alt="MO" onerror="this.style.display='none'">
+        <span>MATRIXORIGIN</span>
+      </div>
+      <div class="title-area">
+        <div class="v-title">智能日报</div>
+        <div class="side-content">
+          <p class="desc">以智驭繁<br>日有所记<br>事有所察</p>
+          <ul class="features">
+            <li>流式摘要 · 智能提炼</li>
+            <li>自然语言 · 数据洞察</li>
+            <li>一键周报 · 省时省力</li>
+          </ul>
+        </div>
+      </div>
+      <div class="stamp">
+        <svg width="90" height="90" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="seal" x="-5%" y="-5%" width="110%" height="110%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="5" seed="88"/>
+              <feDisplacementMap in="SourceGraphic" scale="2.5"/>
+            </filter>
+          </defs>
+          <g filter="url(#seal)" opacity="0.82">
+            <rect x="3" y="3" width="124" height="124" stroke="#C4463A" stroke-width="4.5" fill="none"/>
+            <rect x="11" y="11" width="108" height="108" stroke="#C4463A" stroke-width="1.5" fill="none"/>
+            <path d="M3 3 L22 3 L22 9 L9 9 L9 22 L3 22" stroke="#C4463A" stroke-width="2" fill="none"/>
+            <path d="M127 3 L108 3 L108 9 L121 9 L121 22 L127 22" stroke="#C4463A" stroke-width="2" fill="none"/>
+            <path d="M3 127 L22 127 L22 121 L9 121 L9 108 L3 108" stroke="#C4463A" stroke-width="2" fill="none"/>
+            <path d="M127 127 L108 127 L108 121 L121 121 L121 108 L127 108" stroke="#C4463A" stroke-width="2" fill="none"/>
+            <text x="93" y="52" font-family="'Ma Shan Zheng'" font-size="40" fill="#C4463A" text-anchor="middle">矩</text>
+            <text x="37" y="52" font-family="'Ma Shan Zheng'" font-size="40" fill="#C4463A" text-anchor="middle">起</text>
+            <text x="93" y="104" font-family="'Ma Shan Zheng'" font-size="40" fill="#C4463A" text-anchor="middle">阵</text>
+            <text x="37" y="104" font-family="'Ma Shan Zheng'" font-size="40" fill="#C4463A" text-anchor="middle">源</text>
+          </g>
+        </svg>
+      </div>
+      <p class="copyright">© 2026 矩阵起源 MatrixOrigin</p>
+    </div>
+    <div class="right">
+      <h1 class="form-title">欢迎回来</h1>
+      <p class="form-sub">登录以继续</p>
+      <form>
+        <div class="field">
+          <label>用户名</label>
+          <input type="text" placeholder="请输入用户名" autofocus>
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <div class="pwd-wrap">
+            <input type="password" placeholder="请输入密码" id="pwd2">
+            <button type="button" class="eye-btn" onclick="var p=document.getElementById('pwd2');var b=this;if(p.type==='password'){p.type='text';b.innerHTML='<svg width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.5\'><path d=\'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94\'/><path d=\'M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19\'/><line x1=\'1\' y1=\'1\' x2=\'23\' y2=\'23\'/></svg>';}else{p.type='password';b.innerHTML='<svg width=\'16\' height=\'16\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.5\'><path d=\'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z\'/><circle cx=\'12\' cy=\'12\' r=\'3\'/></svg>';}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          </div>
+        </div>
+        <button class="btn" type="submit">登 录</button>
+      </form>
+      <div class="footer-text">
+        测试账号：test / 123456<br>
+        Powered by MatrixOne Intelligence
+      </div>
+    </div>
+  </div>
+</body>
+</html>

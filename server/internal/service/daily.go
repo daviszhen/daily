@@ -4,59 +4,40 @@ import (
 	"context"
 	"fmt"
 	"smart-daily/internal/model"
+	"smart-daily/internal/repository"
 	"strings"
 	"time"
-
-	"gorm.io/gorm"
 )
 
-type DailyService struct {
-	db *gorm.DB
-}
+type DailyService struct{ repo *repository.DailyRepo }
 
-func NewDailyService(db *gorm.DB) *DailyService { return &DailyService{db: db} }
+func NewDailyService(repo *repository.DailyRepo) *DailyService { return &DailyService{repo: repo} }
 
 func (s *DailyService) Save(ctx context.Context, memberID int, date, content, summary, risk string) (int, error) {
 	if date == "" {
 		date = time.Now().Format("2006-01-02")
 	}
-
-	entry := model.DailyEntry{
+	entry := &model.DailyEntry{
 		MemberID: memberID, DailyDate: date,
 		Content: content, Summary: summary, Source: "chat",
 	}
-	if err := s.db.WithContext(ctx).Create(&entry).Error; err != nil {
+	if err := s.repo.CreateEntry(ctx, entry); err != nil {
 		return 0, fmt.Errorf("insert entry: %w", err)
 	}
-
 	return entry.ID, nil
 }
 
-// UpdateDailySummary 用 LLM 合并后的总结更新 daily_summaries（upsert）
 func (s *DailyService) UpdateDailySummary(ctx context.Context, memberID int, date, summary, risk string) error {
-	var existing model.DailySummary
-	err := s.db.WithContext(ctx).
-		Where("member_id = ? AND daily_date = ?", memberID, date).
-		First(&existing).Error
-
-	if err == gorm.ErrRecordNotFound {
-		return s.db.WithContext(ctx).Create(&model.DailySummary{
-			MemberID: memberID, DailyDate: date, Summary: summary, Risk: risk,
-		}).Error
-	}
-	if err != nil {
-		return fmt.Errorf("query summary: %w", err)
-	}
-	return s.db.WithContext(ctx).Model(&existing).Updates(map[string]interface{}{
-		"summary": summary, "risk": risk,
-	}).Error
+	return s.repo.UpsertSummary(ctx, memberID, date, summary, risk)
 }
 
-// GetDailySummary 获取某人某天的总结
 func (s *DailyService) GetDailySummary(ctx context.Context, memberID int, date string, out *model.DailySummary) error {
-	return s.db.WithContext(ctx).
-		Where("member_id = ? AND daily_date = ?", memberID, date).
-		First(out).Error
+	got, err := s.repo.GetSummary(ctx, memberID, date)
+	if err != nil {
+		return err
+	}
+	*out = *got
+	return nil
 }
 
 func (s *DailyService) GetMemberWeekData(ctx context.Context, memberID int) (string, error) {
@@ -64,17 +45,10 @@ func (s *DailyService) GetMemberWeekData(ctx context.Context, memberID int) (str
 }
 
 func (s *DailyService) GetMemberDateRangeData(ctx context.Context, memberID int, start, end string) (string, error) {
-	var entries []model.DailyEntry
-	q := s.db.WithContext(ctx).Where("member_id = ?", memberID)
-	if start != "" && end != "" {
-		q = q.Where("daily_date BETWEEN ? AND ?", start, end)
-	} else {
-		q = q.Where("daily_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)")
-	}
-	if err := q.Order("daily_date").Find(&entries).Error; err != nil {
+	entries, err := s.repo.GetMemberEntries(ctx, memberID, start, end)
+	if err != nil {
 		return "", fmt.Errorf("query member data: %w", err)
 	}
-
 	var sb strings.Builder
 	for _, e := range entries {
 		content := e.Summary
@@ -82,9 +56,6 @@ func (s *DailyService) GetMemberDateRangeData(ctx context.Context, memberID int,
 			content = e.Content
 		}
 		sb.WriteString(fmt.Sprintf("[%s] %s\n", e.DailyDate, content))
-	}
-	if sb.Len() == 0 {
-		return "", nil
 	}
 	return sb.String(), nil
 }

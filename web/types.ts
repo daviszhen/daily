@@ -46,4 +46,16 @@ export type DailyReport = {
   timestamp: Date;
 };
 
-export type ViewMode = 'chat' | 'feed' | 'stats';
+export type ViewMode = 'chat' | 'feed' | 'stats' | 'calendar';
+
+export type Member = {
+  id: number;
+  username: string;
+  name: string;
+  avatar: string;
+  role: string;
+  team: string;
+  team_id: number;
+  team_name: string;
+  status: 'active' | 'resigned' | 'transferred';
+};

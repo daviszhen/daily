@@ -372,3 +372,115 @@ func TestSummaryModeDownload(t *testing.T) {
 	}
 	t.Log("OK: download card shown after report generation")
 }
+
+func TestCalendarNavigation(t *testing.T) {
+	b := newBrowser(t, 60*time.Second)
+	defer b.close()
+	b.login("kuaiweikang", "123456")
+
+	// Navigate to calendar tab
+	b.clickButton("我的日历")
+	b.run(chromedp.Sleep(2 * time.Second))
+
+	body := b.bodyText()
+	if !strings.Contains(body, "我的日历") {
+		t.Fatal("calendar page not shown")
+	}
+	if !strings.Contains(body, "2026 年 03 月") {
+		t.Fatalf("expected current month 2026-03, got: %s", body[:200])
+	}
+	t.Log("OK: calendar page loaded with current month")
+
+	// Check stats bar
+	if !strings.Contains(body, "已提交") {
+		t.Fatal("stats bar not shown")
+	}
+	t.Log("OK: stats bar visible")
+
+	// Click previous month arrow (ChevronLeft)
+	b.eval(`(function(){
+		var btns = document.querySelectorAll('button');
+		for (var i = 0; i < btns.length; i++) {
+			if (btns[i].querySelector('svg') && btns[i].nextElementSibling && btns[i].nextElementSibling.textContent.includes('年')) {
+				btns[i].click(); return 'clicked';
+			}
+		}
+		return 'not found';
+	})()`)
+	b.run(chromedp.Sleep(2 * time.Second))
+
+	body = b.bodyText()
+	if !strings.Contains(body, "2026 年 02 月") {
+		t.Fatalf("prev month navigation failed, body: %s", body[:200])
+	}
+	t.Log("OK: navigated to 2026-02")
+
+	// Click previous again to go to 2026-01 (should show holidays)
+	b.eval(`(function(){
+		var btns = document.querySelectorAll('button');
+		for (var i = 0; i < btns.length; i++) {
+			if (btns[i].querySelector('svg') && btns[i].nextElementSibling && btns[i].nextElementSibling.textContent.includes('年')) {
+				btns[i].click(); return;
+			}
+		}
+	})()`)
+	b.run(chromedp.Sleep(2 * time.Second))
+
+	body = b.bodyText()
+	if !strings.Contains(body, "2026 年 01 月") {
+		t.Fatalf("second prev navigation failed, body: %s", body[:200])
+	}
+	if !strings.Contains(body, "元旦") {
+		t.Fatal("January should show 元旦 holiday")
+	}
+	t.Log("OK: navigated to 2026-01, 元旦 holiday visible")
+
+	// Click next month arrow (ChevronRight) to go back to 2026-02
+	b.eval(`(function(){
+		var btns = document.querySelectorAll('button');
+		for (var i = 0; i < btns.length; i++) {
+			if (btns[i].querySelector('svg') && btns[i].previousElementSibling && btns[i].previousElementSibling.textContent.includes('年')) {
+				btns[i].click(); return;
+			}
+		}
+	})()`)
+	b.run(chromedp.Sleep(2 * time.Second))
+
+	body = b.bodyText()
+	if !strings.Contains(body, "2026 年 02 月") {
+		t.Fatalf("next month navigation failed, body: %s", body[:200])
+	}
+	t.Log("OK: forward navigation to 2026-02 works")
+}
+
+func TestCalendarDayClick(t *testing.T) {
+	b := newBrowser(t, 60*time.Second)
+	defer b.close()
+	b.login("kuaiweikang", "123456")
+
+	b.clickButton("我的日历")
+	b.run(chromedp.Sleep(2 * time.Second))
+
+	// Click on a past date (March 2, which should be a workday)
+	b.eval(`(function(){
+		var cells = document.querySelectorAll('.aspect-square');
+		for (var i = 0; i < cells.length; i++) {
+			var span = cells[i].querySelector('span');
+			if (span && span.textContent.trim() === '2') {
+				cells[i].click(); return 'clicked';
+			}
+		}
+		return 'not found';
+	})()`)
+	b.run(chromedp.Sleep(1 * time.Second))
+
+	body := b.bodyText()
+	if !strings.Contains(body, "2026-03-02") {
+		t.Fatal("clicking day 2 should show date detail")
+	}
+	// Should show action button (去补填 or 重新填写)
+	if !strings.Contains(body, "补填") && !strings.Contains(body, "填写") {
+		t.Fatal("action button not shown for selected date")
+	}
+	t.Log("OK: day click shows detail with action button")
+}

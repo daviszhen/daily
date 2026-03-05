@@ -234,7 +234,9 @@ function tryParse(s: string): any { try { return JSON.parse(s); } catch { return
 // ============ Import ============
 
 export interface PreviewEntry { date: string; name: string; content: string }
-export interface PreviewResult { token: string; entries: PreviewEntry[]; unmatched_members: string[] }
+export interface PreviewMember { id: number; name: string }
+export interface PreviewResult { token: string; entries: PreviewEntry[]; unmatched_members: string[]; members: PreviewMember[] }
+export interface MemberDecision { action: 'create' | 'map' | 'ignore'; name?: string; member_id?: number; team_id?: number; role?: string }
 export interface ConfirmResult { imported: number; merged: number; skipped: number; skipped_members: string[]; total: number }
 
 export async function previewImport(file: File): Promise<PreviewResult> {
@@ -252,11 +254,13 @@ export async function previewImport(file: File): Promise<PreviewResult> {
   return res.json();
 }
 
-export async function confirmImport(token: string): Promise<ConfirmResult> {
+export async function confirmImport(token: string, memberDecisions?: Record<string, MemberDecision>): Promise<ConfirmResult> {
+  const body: any = { token };
+  if (memberDecisions) body.member_decisions = memberDecisions;
   const res = await fetch('/api/import/confirm', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(_token ? { 'Authorization': `Bearer ${_token}` } : {}) },
-    body: JSON.stringify({ token }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: '导入失败' }));
@@ -267,6 +271,126 @@ export async function confirmImport(token: string): Promise<ConfirmResult> {
 
 // ============ Feed ============
 
+export interface MemberDailySummary {
+  member_id: number; member_name: string; daily_date: string; summary: string; risk: string;
+}
+export interface MemberFeed { member_id: number; member_name: string; items: MemberDailySummary[] }
+export interface FeedByMemberResult { start: string; end: string; members: MemberFeed[] }
+
+export async function getFeedByMember(start?: string, end?: string): Promise<FeedByMemberResult> {
+  const params = new URLSearchParams();
+  if (start) params.set('start', start);
+  if (end) params.set('end', end);
+  const res = await apiFetch(`/api/feed/by-member?${params}`);
+  return res.json();
+}
+
+export interface TopicActivityItem { member_name: string; daily_date: string; content: string }
+export interface TopicFeed { topic: string; members: string[]; items: TopicActivityItem[] }
+export interface FeedByTopicResult { start: string; end: string; topics: TopicFeed[] }
+
+export async function getFeedByTopic(start?: string, end?: string): Promise<FeedByTopicResult> {
+  const params = new URLSearchParams();
+  if (start) params.set('start', start);
+  if (end) params.set('end', end);
+  const res = await apiFetch(`/api/feed/by-topic?${params}`);
+  return res.json();
+}
+
+export interface TopicRiskItem { topic: string; member_name: string; daily_date: string; risk: string }
+export interface InsightItem {
+  topic_id: number; topic: string; first_date: string; last_date: string; days: number;
+  member_count: number; entry_count: number; risk_level: string; risks: TopicRiskItem[] | null;
+}
+export interface InsightsResult { insights: InsightItem[] }
+
+export async function getInsights(): Promise<InsightsResult> {
+  const res = await apiFetch('/api/insights');
+  return res.json();
+}
+
+export interface TopicInfo { id: number; name: string; description: string; status: string; created_at: string; resolved_at: string | null }
+
+export async function getAllTopics(): Promise<TopicInfo[]> {
+  const res = await apiFetch('/api/topics/all');
+  return res.json();
+}
+
+export async function resolveTopic(id: number): Promise<void> {
+  await apiFetch(`/api/topics/${id}/resolve`, { method: 'PUT' });
+}
+
+export async function reopenTopic(id: number): Promise<void> {
+  await apiFetch(`/api/topics/${id}/reopen`, { method: 'PUT' });
+}
+
+export async function updateTopic(id: number, data: { name?: string; description?: string }): Promise<void> {
+  await apiFetch(`/api/topics/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+}
+
 export async function getTeamReports(): Promise<any[]> {
   return [];
+}
+
+// ============ Members ============
+
+import { Member } from '../types';
+
+export async function getMembers(): Promise<Member[]> {
+  const res = await apiFetch('/api/members');
+  return res.json();
+}
+
+export async function updateMember(id: number, data: { status?: string; team?: string; team_id?: number; role?: string }): Promise<void> {
+  await apiFetch(`/api/members/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function deleteMember(id: number): Promise<void> {
+  await apiFetch(`/api/members/${id}`, { method: 'DELETE' });
+}
+
+export type Team = { id: number; name: string };
+
+export async function getTeams(): Promise<Team[]> {
+  const res = await apiFetch('/api/teams');
+  return res.json();
+}
+
+export async function createTeam(name: string): Promise<Team> {
+  const res = await apiFetch('/api/teams', { method: 'POST', body: JSON.stringify({ name }) });
+  return res.json();
+}
+
+// ============ Calendar ============
+
+export interface CalendarDay {
+  date: string;
+  weekday: number;
+  is_workday: boolean;
+  holiday?: string;
+  submitted: boolean;
+}
+
+export interface CalendarData {
+  month: string;
+  days: CalendarDay[];
+  workdays: number;
+  filled_workdays: number;
+}
+
+export async function getCalendar(month: string): Promise<CalendarData> {
+  const res = await apiFetch(`/api/calendar?month=${month}`);
+  return res.json();
+}
+
+export interface DaySummary {
+  date: string;
+  submitted: boolean;
+  summary?: string;
+  risk?: string;
+}
+
+export async function getDaySummary(date: string): Promise<DaySummary> {
+  const res = await apiFetch(`/api/calendar/day?date=${date}`);
+  return res.json();
 }

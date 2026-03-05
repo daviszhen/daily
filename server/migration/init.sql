@@ -3,6 +3,11 @@ DROP DATABASE IF EXISTS smart_daily;
 CREATE DATABASE smart_daily;
 USE smart_daily;
 
+CREATE TABLE teams (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE
+);
+
 CREATE TABLE members (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
@@ -10,7 +15,9 @@ CREATE TABLE members (
     name VARCHAR(50) NOT NULL,
     avatar VARCHAR(255) DEFAULT '',
     role VARCHAR(50) DEFAULT '开发工程师',
-    team VARCHAR(50) DEFAULT '研发团队'
+    team_id INT DEFAULT 0,
+    team VARCHAR(50) DEFAULT '',
+    status VARCHAR(20) DEFAULT 'active'
 );
 
 CREATE TABLE daily_entries (
@@ -32,6 +39,27 @@ CREATE TABLE daily_summaries (
     risk TEXT,
     blocker TEXT,
     UNIQUE KEY uk_member_date (member_id, daily_date)
+);
+
+CREATE TABLE topic_activities (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    topic VARCHAR(100) NOT NULL,
+    member_id INT NOT NULL,
+    member_name VARCHAR(50) NOT NULL,
+    daily_date DATE NOT NULL,
+    content TEXT,
+    entry_id INT DEFAULT 0,
+    INDEX idx_topic (topic),
+    INDEX idx_daily_date (daily_date)
+);
+
+CREATE TABLE topics (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT DEFAULT '',
+    status VARCHAR(20) DEFAULT 'active',
+    created_at DATETIME DEFAULT NOW(),
+    resolved_at DATETIME DEFAULT NULL
 );
 
 -- 预设用户 密码都是 123456

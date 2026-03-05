@@ -29,7 +29,7 @@ run-stop:
 
 # ============ 辅助 ============
 build:
-	cd web && npm run build
+	cd web && npm install && npm run build
 	cp web/mo-logo.png server/cmd/server/dist/
 	cd server && CGO_ENABLED=0 go build -o ../bin/smart-daily ./cmd/server/
 	@echo "✅ Binary: bin/smart-daily"

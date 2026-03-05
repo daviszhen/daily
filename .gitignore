@@ -38,3 +38,16 @@ logs/
 web/node_modules/
 web/dist/
 .pid
+
+# Secrets
+server/etc/config-dev.yaml
+
+# Kiro
+.kiro/
+
+# Test docs
+docs/*.docx
+
+# Exports
+exports/
+kiro对话-daily

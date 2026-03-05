@@ -1,6 +1,15 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
+
+type Team struct {
+	ID   int    `gorm:"primaryKey" json:"id"`
+	Name string `gorm:"uniqueIndex" json:"name"`
+}
 
 type Member struct {
 	ID       int    `gorm:"primaryKey" json:"id"`
@@ -9,7 +18,10 @@ type Member struct {
 	Name     string `json:"name"`
 	Avatar   string `json:"avatar"`
 	Role     string `json:"role"`
+	TeamID   int    `json:"team_id"`
 	Team     string `json:"team"`
+	Status   string `gorm:"default:active" json:"status"`
+	IsAdmin  bool   `gorm:"default:false" json:"is_admin"`
 }
 
 type DailyEntry struct {
@@ -32,6 +44,34 @@ type DailySummary struct {
 	Blocker   string `json:"blocker"`
 }
 
-func (DailySummary) TableName() string { return "daily_summaries" }
-func (DailyEntry) TableName() string   { return "daily_entries" }
-func (Member) TableName() string       { return "members" }
+type TopicActivity struct {
+	ID         int    `gorm:"primaryKey" json:"id"`
+	Topic      string `gorm:"index" json:"topic"`
+	MemberID   int    `json:"member_id"`
+	MemberName string `json:"member_name"`
+	DailyDate  string `gorm:"type:date;index" json:"daily_date"`
+	Content    string `json:"content"`
+	EntryID    int    `json:"entry_id"`
+}
+
+type Topic struct {
+	ID          int        `gorm:"primaryKey" json:"id"`
+	Name        string     `gorm:"uniqueIndex" json:"name"`
+	Description string     `json:"description"`
+	Status      string     `gorm:"default:active" json:"status"` // active / resolved
+	CreatedAt   time.Time  `json:"created_at"`
+	ResolvedAt  *time.Time `json:"resolved_at,omitempty"`
+}
+
+func (Team) TableName() string            { return "teams" }
+func (DailySummary) TableName() string    { return "daily_summaries" }
+func (DailyEntry) TableName() string      { return "daily_entries" }
+func (Member) TableName() string          { return "members" }
+func (TopicActivity) TableName() string   { return "topic_activities" }
+func (Topic) TableName() string           { return "topics" }
+
+// ActiveMembers is a GORM scope that excludes logically deleted members.
+// Use: db.Scopes(model.ActiveMembers).Find(&members)
+func ActiveMembers(db *gorm.DB) *gorm.DB {
+	return db.Where("members.status != 'deleted'")
+}

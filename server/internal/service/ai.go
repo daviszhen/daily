@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"smart-daily/internal/logger"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,51 +34,37 @@ func NewAIService(baseURL, apiKey, model, fastModel, dbName string, raw *sdk.Raw
 
 func (s *AIService) SetCatalogDBID(id int) { s.catalogDBID = id }
 
-// SeedKnowledge 初始化 NL2SQL Knowledge，让 Data Asking 了解表结构
+// SeedKnowledge ensures NL2SQL Knowledge entries exist.
+// Existing entries (matched by key) are skipped; only missing ones are created.
+// Knowledge definitions are shared with cmd/catalog_init via KnowledgeEntries().
 func (s *AIService) SeedKnowledge(ctx context.Context) {
 	if s.raw == nil {
 		return
 	}
-	// 检查是否已有 knowledge
-	list, err := s.raw.ListKnowledge(ctx, &sdk.NL2SQLKnowledgeListRequest{PageNumber: 1, PageSize: 1})
-	if err == nil && list.Total > 0 {
-		return // 已初始化
-	}
 
-	knowledges := []sdk.NL2SQLKnowledgeCreateRequest{
-		{
-			Type: "term_explanation", Key: "members表",
-			Value:           []string{"members 表存储团队成员信息。字段：id(主键), username(登录名), name(中文姓名), role(职位), team(所属团队)。查询某人信息时用 name 字段匹配中文名。"},
-			AssociateTables: []string{"members"},
-		},
-		{
-			Type: "term_explanation", Key: "daily_entries表",
-			Value:           []string{"daily_entries 表存储每条日报原始记录。字段：id(主键), member_id(关联members.id), daily_date(日期,date类型), content(原始工作内容), summary(AI摘要), source(来源:chat或import), created_at(创建时间)。一个人一天可能有多条记录。"},
-			AssociateTables: []string{"daily_entries"},
-		},
-		{
-			Type: "term_explanation", Key: "daily_summaries表",
-			Value:           []string{"daily_summaries 表存储每人每天的合并总结。字段：id(主键), member_id(关联members.id), daily_date(日期), summary(当天合并总结), risk(风险项), blocker(阻塞项), status(状态)。每人每天最多一条。"},
-			AssociateTables: []string{"daily_summaries"},
-		},
-		{
-			Type: "sql_example", Key: "查询某人某天做了什么",
-			Value:           []string{"SELECT m.name, e.daily_date, e.summary FROM daily_entries e JOIN members m ON e.member_id = m.id WHERE m.name = '某人' AND e.daily_date = '2026-02-28'"},
-			AssociateTables: []string{"daily_entries", "members"},
-		},
-		{
-			Type: "sql_example", Key: "查询团队某天所有人的工作",
-			Value:           []string{"SELECT m.name, s.summary, s.risk FROM daily_summaries s JOIN members m ON s.member_id = m.id WHERE s.daily_date = '2026-02-28' ORDER BY m.name"},
-			AssociateTables: []string{"daily_summaries", "members"},
-		},
-	}
-
-	for _, k := range knowledges {
-		if _, err := s.raw.CreateKnowledge(ctx, &k); err != nil {
-			fmt.Printf("[knowledge] seed failed: %s: %v\n", k.Key, err)
+	// Collect existing keys
+	existing := map[string]bool{}
+	list, err := s.raw.ListKnowledge(ctx, &sdk.NL2SQLKnowledgeListRequest{PageNumber: 1, PageSize: 100})
+	if err == nil {
+		for _, k := range list.List {
+			existing[k.Key] = true
 		}
 	}
-	fmt.Printf("[knowledge] seeded %d entries\n", len(knowledges))
+
+	created := 0
+	for _, k := range KnowledgeEntries() {
+		if existing[k.Key] {
+			continue
+		}
+		if _, err := s.raw.CreateKnowledge(ctx, &k); err != nil {
+			logger.Warn("knowledge seed failed", "key", k.Key, "err", err)
+		} else {
+			created++
+		}
+	}
+	if created > 0 {
+		logger.Info("knowledge seeded", "created", created, "existing", len(existing))
+	}
 }
 
 func (s *AIService) doChat(ctx context.Context, system, user string, stream bool, flush func(string)) (string, error) {
@@ -583,4 +572,72 @@ func (s *AIService) StreamEmptyQueryFallback(ctx context.Context, question strin
 	user := fmt.Sprintf("用户问题：%s\n\n查询过程摘要：%s", question, thinkingContext)
 	_, err := s.stream(ctx, system, user, flush)
 	return err
+}
+
+// ExtractTopics extracts topic/project names from work content.
+// existingTopics is injected into the prompt for normalization.
+func (s *AIService) ExtractTopics(ctx context.Context, content string, existingTopics []string) ([]string, error) {
+	result, err := s.ExtractTopicsBatch(ctx, map[int]string{0: content}, existingTopics)
+	if err != nil {
+		return []string{"其他"}, nil
+	}
+	if topics, ok := result[0]; ok && len(topics) > 0 {
+		return topics, nil
+	}
+	return []string{"其他"}, nil
+}
+
+// TopicInput is a batch entry for topic extraction.
+type TopicInput struct {
+	ID      int
+	Content string
+}
+
+// ExtractTopicsBatch extracts topics for multiple entries in one LLM call.
+// Returns map[entryID][]string.
+func (s *AIService) ExtractTopicsBatch(ctx context.Context, contents map[int]string, existingTopics []string) (map[int][]string, error) {
+	var topicHint string
+	if len(existingTopics) > 0 {
+		topicHint = "\n已有 topic 列表：" + strings.Join(existingTopics, "、") + "\n请优先匹配已有名称，避免同一项目出现多个叫法。\n"
+	}
+
+	system := `从以下编号工作内容中提取每条涉及的项目/产品/模块名称（topic）。` + topicHint + `
+规则：
+- topic 是项目名、产品名或模块名，如"MOI"、"问数"、"MatrixOne内核"
+- 不要把动作（开发、测试、修复）当作 topic
+- 不要把人名当作 topic
+- 不要把 issue 编号（如 #12345）、版本号（如 1.2.0）、文件路径当作 topic
+- 每条内容通常 1-2 个 topic
+- 返回 JSON：{"1":["topicA"],"2":["topicB","topicC"],...}
+- 无明确 topic 的条目返回 ["其他"]
+- 只返回 JSON`
+
+	// Build numbered input
+	var sb strings.Builder
+	ids := make([]int, 0, len(contents))
+	for id := range contents {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	for _, id := range ids {
+		fmt.Fprintf(&sb, "[%d] %s\n", id, contents[id])
+	}
+
+	result, err := s.doChatWithModel(ctx, s.fastModel, system, sb.String(), false, nil)
+	if err != nil {
+		return nil, err
+	}
+	var parsed map[string][]string
+	if json.Unmarshal([]byte(result), &parsed) != nil {
+		return nil, fmt.Errorf("invalid JSON: %s", result)
+	}
+	out := make(map[int][]string, len(parsed))
+	for k, v := range parsed {
+		id, _ := strconv.Atoi(k)
+		if len(v) == 0 {
+			v = []string{"其他"}
+		}
+		out[id] = v
+	}
+	return out, nil
 }
