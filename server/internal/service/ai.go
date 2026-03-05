@@ -316,7 +316,7 @@ func (s *AIService) StreamQueryAnswer(ctx context.Context, question string, sess
 				Tables: &sdk.DataAskingTableConfig{
 					Type:      "specified",
 					DbName:    s.dbName,
-					TableList: []string{"daily_entries", "members", "daily_summaries"},
+					TableList: []string{"daily_entries", "members", "daily_summaries", "teams", "topics", "topic_activities"},
 				},
 			},
 			DataScope:     &sdk.DataScope{Type: "all"},
