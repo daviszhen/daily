@@ -40,7 +40,6 @@ web/dist/
 .pid
 
 # Secrets
-server/etc/config-dev.yaml
 
 # Kiro
 .kiro/
