@@ -88,12 +88,16 @@ func (s *SessionService) ListMessages(ctx context.Context, sessionID int64) ([]C
 		return nil, nil
 	}
 
+	// Fetch full messages in parallel with bounded concurrency
 	msgs := make([]ChatMessage, len(stubs))
+	sem := make(chan struct{}, 10)
 	var wg sync.WaitGroup
 	for i, stub := range stubs {
 		wg.Add(1)
+		sem <- struct{}{}
 		go func(i int, id int64) {
 			defer wg.Done()
+			defer func() { <-sem }()
 			var m ChatMessage
 			if err := s.doJSON(ctx, "GET", fmt.Sprintf("/api/chat-messages/%d", id), nil, &m); err == nil {
 				msgs[i] = m
@@ -118,6 +122,18 @@ func (s *SessionService) SaveMessage(ctx context.Context, userID string, session
 		"status":     "success",
 	}
 	return s.doJSON(ctx, "POST", "/api/chat-messages", body, nil)
+}
+
+// SaveMessagesParallel saves user + assistant messages in parallel.
+func (s *SessionService) SaveMessagesParallel(ctx context.Context, userID string, sessionID int64, userContent, userConfig, assistantContent, assistantConfig string) {
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); s.SaveMessage(ctx, userID, sessionID, "user", userContent, userConfig) }()
+	go func() {
+		defer wg.Done()
+		s.SaveMessage(ctx, userID, sessionID, "assistant", assistantContent, assistantConfig)
+	}()
+	wg.Wait()
 }
 
 // --- HTTP helper ---

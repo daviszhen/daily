@@ -117,7 +117,7 @@ func (s *sseWriter) done() {
 	s.event("done", map[string]string{})
 }
 
-// saveMessages persists user input + assistant reply to MOI session (fire-and-forget).
+// saveMessages persists user input + assistant reply to MOI session (fire-and-forget, parallel).
 func (h *ChatHandler) saveMessages(userName string, sessionID *int64, userText, assistantText, configJSON, mode string) {
 	if h.session == nil || sessionID == nil {
 		return
@@ -128,8 +128,7 @@ func (h *ChatHandler) saveMessages(userName string, sessionID *int64, userText, 
 		if mode != "" {
 			userCfg = `{"mode":"` + mode + `"}`
 		}
-		h.session.SaveMessage(ctx, userName, *sessionID, "user", userText, userCfg)
-		h.session.SaveMessage(ctx, userName, *sessionID, "assistant", assistantText, configJSON)
+		h.session.SaveMessagesParallel(ctx, userName, *sessionID, userText, userCfg, assistantText, configJSON)
 	}()
 }
 
@@ -199,8 +198,8 @@ func (h *ChatHandler) streamReportCapture(ctx context.Context, sse *sseWriter, u
 		extracted = req.Text
 	}
 
-	// 带历史上下文验证是否为有效工作内容
-	valid, reply, err := h.ai.ValidateWorkContent(ctx, extracted)
+	// 带历史上下文验证是否为有效工作内容 + 充分性检查（合并为一次 LLM 调用）
+	valid, sufficient, reply, err := h.ai.ValidateAndAssess(ctx, extracted)
 	if err != nil {
 		logger.Warn("validate fallback", "err", err)
 	}
@@ -209,18 +208,11 @@ func (h *ChatHandler) streamReportCapture(ctx context.Context, sse *sseWriter, u
 		sse.done()
 		return reply, ""
 	}
-
-	// 充分性检查（对提取后的内容判断）
-	sufficient, followUp, err := h.ai.AssessCompleteness(ctx, extracted)
-	if err != nil {
-		logger.Warn("assess fallback", "err", err)
-		sufficient = true
-	}
 	logger.Info("chat.report.assess", "extracted", extracted, "sufficient", sufficient)
-	if !sufficient && followUp != "" {
-		sse.token(followUp)
+	if !sufficient && reply != "" {
+		sse.token(reply)
 		sse.done()
-		return followUp, ""
+		return reply, ""
 	}
 
 	summary, err := h.ai.StreamSummarize(ctx, extracted, sse.token)

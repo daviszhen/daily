@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -74,10 +76,16 @@ func (c *apiClient) doList(method, path string) (int, []interface{}) {
 	return resp.StatusCode, result
 }
 
-func (c *apiClient) doRaw(method, path string) *http.Response {
+func (c *apiClient) doRaw(method, path string, body ...interface{}) *http.Response {
 	c.t.Helper()
-	req, _ := http.NewRequest(method, baseURL+path, nil)
+	var reqBody io.Reader
+	if len(body) > 0 && body[0] != nil {
+		b, _ := json.Marshal(body[0])
+		reqBody = bytes.NewReader(b)
+	}
+	req, _ := http.NewRequest(method, baseURL+path, reqBody)
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		c.t.Fatalf("%s %s failed: %v", method, path, err)
@@ -562,4 +570,97 @@ func TestAPILogs(t *testing.T) {
 		t.Fatalf("unauthenticated expected 401, got %d", resp3.StatusCode)
 	}
 	t.Log("OK: unauthenticated rejected")
+}
+
+func TestBenchmarkReportValidate(t *testing.T) {
+	benchData := loadBenchmarks(t)
+	c := newAPIClient(t)
+
+	for _, tc := range benchData.ReportValidate.Cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			start := time.Now()
+			resp := c.doRaw("POST", "/api/chat/stream", map[string]string{"text": tc.Input, "mode": "report"})
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			elapsed := time.Since(start).Seconds()
+
+			content := string(body)
+			hasConfirm := strings.Contains(content, "summary_confirm")
+
+			if tc.ExpectValid && tc.ExpectSufficient {
+				if !hasConfirm {
+					t.Errorf("expected summary_confirm for valid+sufficient input")
+				}
+			} else {
+				if hasConfirm {
+					t.Errorf("unexpected summary_confirm for invalid/insufficient input")
+				}
+			}
+
+			if elapsed > tc.MaxSeconds {
+				t.Logf("WARN: %s took %.1fs, exceeds baseline %.0fs", tc.Name, elapsed, tc.MaxSeconds)
+			}
+			t.Logf("OK: %s → %.1fs (limit %.0fs), hasConfirm=%v", tc.Name, elapsed, tc.MaxSeconds, hasConfirm)
+		})
+	}
+}
+
+func TestBenchmarkDataAsking(t *testing.T) {
+	benchData := loadBenchmarks(t)
+	c := newAPIClient(t)
+
+	for _, tc := range benchData.DataAsking.Cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			start := time.Now()
+			resp := c.doRaw("POST", "/api/chat/stream", map[string]string{"text": tc.Input, "mode": "query"})
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			elapsed := time.Since(start).Seconds()
+
+			hasAnswer := strings.Contains(string(body), "\"token\"")
+			if tc.ExpectHasAnswer && !hasAnswer {
+				t.Errorf("expected answer tokens but got none")
+			}
+
+			if elapsed > tc.MaxSeconds {
+				t.Logf("WARN: %s took %.1fs, exceeds baseline %.0fs", tc.Name, elapsed, tc.MaxSeconds)
+			}
+			t.Logf("OK: %s → %.1fs (limit %.0fs), hasAnswer=%v", tc.Name, elapsed, tc.MaxSeconds, hasAnswer)
+		})
+	}
+}
+
+// --- benchmark helpers ---
+
+type benchmarks struct {
+	ReportValidate struct {
+		Cases []struct {
+			Name             string  `json:"name"`
+			Input            string  `json:"input"`
+			ExpectValid      bool    `json:"expect_valid"`
+			ExpectSufficient bool    `json:"expect_sufficient"`
+			MaxSeconds       float64 `json:"max_seconds"`
+		} `json:"cases"`
+	} `json:"report_validate"`
+	DataAsking struct {
+		Cases []struct {
+			Name            string  `json:"name"`
+			Input           string  `json:"input"`
+			ExpectHasAnswer bool    `json:"expect_has_answer"`
+			MaxSeconds      float64 `json:"max_seconds"`
+		} `json:"cases"`
+	} `json:"data_asking"`
+}
+
+func loadBenchmarks(t *testing.T) benchmarks {
+	t.Helper()
+	data, err := os.ReadFile("benchmarks.json")
+	if err != nil {
+		t.Fatalf("load benchmarks.json: %v", err)
+	}
+	var b benchmarks
+	if err := json.Unmarshal(data, &b); err != nil {
+		t.Fatalf("parse benchmarks.json: %v", err)
+	}
+	return b
 }

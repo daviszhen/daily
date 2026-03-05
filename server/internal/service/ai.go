@@ -174,25 +174,40 @@ func todayContext() string {
 	return fmt.Sprintf("今天是%s（星期%s）。", now.Format("2006-01-02"), weekdays[now.Weekday()])
 }
 
-// ValidateWorkContent 快速判断输入是否为有效工作内容
-func (s *AIService) ValidateWorkContent(ctx context.Context, content string) (valid bool, reply string, err error) {
-	system := `判断用户输入是否为"今天做了什么"的工作汇报内容。
-有效：完成了某任务、修复了某bug、开了某会议、写了某文档等具体工作事项的陈述。
-无效：提问、请求建议、闲聊、感想、抱怨（如"怎么办"、"你觉得呢"、"如何解决"）。
-返回 JSON：{"valid":true} 或 {"valid":false,"reply":"友好引导语"}。只返回 JSON。`
+// ValidateAndAssess 一次 LLM 调用同时判断：是否为有效工作内容 + 是否足够详细
+func (s *AIService) ValidateAndAssess(ctx context.Context, content string) (valid bool, sufficient bool, reply string, err error) {
+	// 兜底：内容太短直接追问
+	clean := strings.TrimSpace(content)
+	for _, c := range []string{"。", "，", ".", ",", "!", "！", "?", "？"} {
+		clean = strings.ReplaceAll(clean, c, "")
+	}
+	if len([]rune(clean)) < 6 {
+		return true, false, "能再具体说说吗？比如做了什么、涉及哪个模块？", nil
+	}
+
+	system := `判断用户输入：
+1. 是否为工作汇报（陈述今天做了什么）？提问、请求建议、闲聊、感想不算。
+2. 如果是工作汇报，内容是否足够具体？"修了个bug"不够，"修复了登录验证码的bug"够。
+
+返回 JSON：
+- 非工作内容：{"valid":false,"reply":"友好引导语"}
+- 工作内容但不够具体：{"valid":true,"sufficient":false,"reply":"简短追问"}
+- 工作内容且足够具体：{"valid":true,"sufficient":true}
+只返回 JSON。`
 
 	result, err := s.doChatWithModel(ctx, s.fastModel, system, content, false, nil)
 	if err != nil {
-		return true, "", fmt.Errorf("validate: %w", err)
+		return true, true, "", nil // 出错时放行
 	}
 	var parsed struct {
-		Valid bool   `json:"valid"`
-		Reply string `json:"reply"`
+		Valid      bool   `json:"valid"`
+		Sufficient bool   `json:"sufficient"`
+		Reply      string `json:"reply"`
 	}
 	if json.Unmarshal([]byte(result), &parsed) != nil {
-		return true, "", nil
+		return true, true, "", nil
 	}
-	return parsed.Valid, parsed.Reply, nil
+	return parsed.Valid, parsed.Sufficient, parsed.Reply, nil
 }
 
 // ExtractWorkContent 从对话历史中提取完整的工作内容（让 LLM 理解上下文）
@@ -218,46 +233,6 @@ func (s *AIService) ExtractWorkContent(ctx context.Context, current string, hist
 		return current, err
 	}
 	return strings.TrimSpace(result), nil
-}
-
-// AssessCompleteness 判断工作内容是否足够详细，不够则返回追问
-func (s *AIService) AssessCompleteness(ctx context.Context, content string) (sufficient bool, followUp string, err error) {
-	// 兜底：内容太短（去掉标点后不足6字）直接追问
-	clean := strings.TrimSpace(content)
-	for _, c := range []string{"。", "，", ".", ",", "!", "！", "?", "？"} {
-		clean = strings.ReplaceAll(clean, c, "")
-	}
-	if len([]rune(clean)) < 6 {
-		return false, "能再具体说说吗？比如做了什么、涉及哪个模块？", nil
-	}
-
-	system := `你是日报审核员。判断用户的工作描述是否足够具体，能形成一条有意义的日报。
-
-【不通过】没说清楚具体做了什么：
-- "登录的" "登录模块" → 不通过（登录模块怎么了？做了什么？）
-- "修了个bug" → 不通过（什么bug？）
-- "写了代码" → 不通过
-- "做了点优化" → 不通过
-
-【通过】说清楚了做了什么事+涉及什么：
-- "修复了登录验证码的bug" → 通过（有动作+有对象）
-- "完成用户管理接口开发" → 通过
-- "参加了产品评审会" → 通过
-
-返回 JSON：{"sufficient":true} 或 {"sufficient":false,"followUp":"简短追问（一句话）"}。只返回 JSON。`
-
-	result, err := s.doChatWithModel(ctx, s.fastModel, system, content, false, nil)
-	if err != nil {
-		return true, "", err
-	}
-	var parsed struct {
-		Sufficient bool   `json:"sufficient"`
-		FollowUp   string `json:"followUp"`
-	}
-	if json.Unmarshal([]byte(result), &parsed) != nil {
-		return true, "", nil
-	}
-	return parsed.Sufficient, parsed.FollowUp, nil
 }
 
 // StreamSummarize 流式生成工作摘要
@@ -316,7 +291,7 @@ func (s *AIService) StreamQueryAnswer(ctx context.Context, question string, sess
 				Tables: &sdk.DataAskingTableConfig{
 					Type:      "specified",
 					DbName:    s.dbName,
-					TableList: []string{"daily_entries", "members", "daily_summaries"},
+					TableList: []string{"daily_entries", "members", "daily_summaries", "teams", "topics", "topic_activities"},
 				},
 			},
 			DataScope:     &sdk.DataScope{Type: "all"},

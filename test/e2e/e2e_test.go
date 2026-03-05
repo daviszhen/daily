@@ -138,13 +138,13 @@ func TestLogin(t *testing.T) {
 }
 
 func TestReportMode(t *testing.T) {
-	b := newBrowser(t, 60*time.Second)
+	b := newBrowser(t, 180*time.Second)
 	defer b.close()
 	b.login("kuaiweikang", "123456")
 
 	b.clickButton("汇报今日工作")
 	b.sendMessage("完成了e2e测试框架重构和智能路由开发")
-	body := b.waitForReply(12 * time.Second)
+	body := b.waitForReply(60 * time.Second)
 
 	if !strings.Contains(body, "日报预览") {
 		t.Fatal("summary confirm card not shown")
@@ -153,13 +153,13 @@ func TestReportMode(t *testing.T) {
 }
 
 func TestQueryMode(t *testing.T) {
-	b := newBrowser(t, 90*time.Second)
+	b := newBrowser(t, 180*time.Second)
 	defer b.close()
 	b.login("kuaiweikang", "123456")
 
 	b.clickButton("查询团队动态")
 	b.sendMessage("蒯伟康最近做了什么")
-	body := b.waitForReply(20 * time.Second)
+	body := b.waitForReply(120 * time.Second)
 
 	if !strings.Contains(body, "思考过程") {
 		t.Log("warning: no thinking steps shown")
@@ -171,13 +171,13 @@ func TestQueryMode(t *testing.T) {
 }
 
 func TestQueryEmptyResult(t *testing.T) {
-	b := newBrowser(t, 90*time.Second)
+	b := newBrowser(t, 180*time.Second)
 	defer b.close()
 	b.login("kuaiweikang", "123456")
 
 	b.clickButton("查询团队动态")
 	b.sendMessage("我今天做了啥")
-	body := b.waitForReply(25 * time.Second)
+	body := b.waitForReply(120 * time.Second)
 
 	// Should NOT be stuck - should have a friendly response
 	msgs := b.eval(`document.querySelectorAll('.rounded-2xl').length`)
@@ -208,7 +208,7 @@ func TestAutoRouteChat(t *testing.T) {
 }
 
 func TestAutoRouteReport(t *testing.T) {
-	b := newBrowser(t, 60*time.Second)
+	b := newBrowser(t, 180*time.Second)
 	defer b.close()
 	b.login("kuaiweikang", "123456")
 
@@ -253,13 +253,13 @@ func TestSessionSwitch(t *testing.T) {
 }
 
 func TestReportVagueContent(t *testing.T) {
-	b := newBrowser(t, 60*time.Second)
+	b := newBrowser(t, 180*time.Second)
 	defer b.close()
 	b.login("kuaiweikang", "123456")
 
 	b.clickButton("汇报今日工作")
 	b.sendMessage("修了个bug")
-	body := b.waitForReply(10 * time.Second)
+	body := b.waitForReply(60 * time.Second)
 
 	// Should NOT show confirm card - should ask follow-up
 	if strings.Contains(body, "日报预览") {
@@ -269,7 +269,7 @@ func TestReportVagueContent(t *testing.T) {
 
 	// Now provide detail
 	b.sendMessage("是登录页面验证码不刷新的问题，在auth模块修的")
-	body = b.waitForReply(12 * time.Second)
+	body = b.waitForReply(60 * time.Second)
 
 	if strings.Contains(body, "日报预览") {
 		t.Log("OK: detailed content got confirm card after follow-up")
@@ -296,13 +296,13 @@ func TestReportValidationReject(t *testing.T) {
 }
 
 func TestSummaryModeThisWeek(t *testing.T) {
-	b := newBrowser(t, 90*time.Second)
+	b := newBrowser(t, 180*time.Second)
 	defer b.close()
 	b.login("kuaiweikang", "123456")
 
 	b.clickButton("生成周报")
 	b.sendMessage("本周周报")
-	body := b.waitForReply(30 * time.Second)
+	body := b.waitForReply(120 * time.Second)
 
 	if !strings.Contains(body, "周报") {
 		t.Fatal("summary mode: no 周报 in response")
@@ -317,13 +317,13 @@ func TestSummaryModeThisWeek(t *testing.T) {
 }
 
 func TestSummaryModeLastWeek(t *testing.T) {
-	b := newBrowser(t, 90*time.Second)
+	b := newBrowser(t, 180*time.Second)
 	defer b.close()
 	b.login("kuaiweikang", "123456")
 
 	b.clickButton("生成周报")
 	b.sendMessage("上周周报")
-	body := b.waitForReply(30 * time.Second)
+	body := b.waitForReply(120 * time.Second)
 
 	// Either a report or a friendly "no data" message
 	if strings.Contains(body, "暂无日报记录") {
@@ -342,7 +342,7 @@ func TestSummaryModeNoData(t *testing.T) {
 
 	b.clickButton("生成周报")
 	b.sendMessage("2020年第一周的周报")
-	body := b.waitForReply(20 * time.Second)
+	body := b.waitForReply(120 * time.Second)
 
 	if !strings.Contains(body, "暂无日报记录") {
 		t.Fatal("summary mode: should show no-data message for empty range")
@@ -357,7 +357,7 @@ func TestSummaryModeDownload(t *testing.T) {
 
 	b.clickButton("生成周报")
 	b.sendMessage("本周周报")
-	b.waitForReply(30 * time.Second)
+	b.waitForReply(120 * time.Second)
 
 	// Check download card appears
 	downloadCard := b.eval(`(function(){

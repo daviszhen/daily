@@ -1,0 +1,46 @@
+{
+  "version": "2026-03-05",
+  "note": "优化记录基准。测试会对比实际结果，超出阈值则 warn。",
+  "report_validate": {
+    "description": "ValidateAndAssess 合并后，日报验证一次 LLM 调用完成",
+    "cases": [
+      {
+        "name": "闲聊拒绝",
+        "input": "你觉得今天天气怎么样",
+        "expect_valid": false,
+        "max_seconds": 5
+      },
+      {
+        "name": "内容不够具体",
+        "input": "修了个bug",
+        "expect_valid": true,
+        "expect_sufficient": false,
+        "max_seconds": 5
+      },
+      {
+        "name": "内容具体通过",
+        "input": "修复了登录页面验证码不刷新的bug，原因是缓存key没有加时间戳",
+        "expect_valid": true,
+        "expect_sufficient": true,
+        "max_seconds": 10
+      }
+    ]
+  },
+  "data_asking": {
+    "description": "Data Asking 6张表，topic/团队查询可用",
+    "cases": [
+      {
+        "name": "topic查询",
+        "input": "哪个topic持续时间最长",
+        "expect_has_answer": true,
+        "max_seconds": 180
+      },
+      {
+        "name": "团队查询",
+        "input": "每个团队有多少人",
+        "expect_has_answer": true,
+        "max_seconds": 180
+      }
+    ]
+  }
+}
