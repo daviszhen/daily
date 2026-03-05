@@ -67,7 +67,11 @@ func (h *ImportHandler) Preview(c *gin.Context) {
 	}
 	out, err := exec.CommandContext(c.Request.Context(), "python3", parserPath, tmp).Output()
 	if err != nil {
-		logger.Error("docx parse failed", "err", err)
+		stderr := ""
+		if ee, ok := err.(*exec.ExitError); ok {
+			stderr = string(ee.Stderr)
+		}
+		logger.Error("docx parse failed", "err", err, "stderr", stderr)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "文档解析失败"})
 		return
 	}

@@ -365,7 +365,6 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
             placeholder={getPlaceholder()}
             style={{ outline: 'none', boxShadow: 'none', color: '#2C2C2C' }}
             className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3 px-3 min-h-[48px] max-h-32"
-            style={{ color: '#2C2C2C' }}
             rows={1}
           />
 
