@@ -50,3 +50,4 @@ docs/*.docx
 # Exports
 exports/
 kiro对话-daily
+*.bak
