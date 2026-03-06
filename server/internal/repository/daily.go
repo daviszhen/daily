@@ -91,6 +91,17 @@ func (r *DailyRepo) BulkReplaceImportEntries(ctx context.Context, delKeys [][]in
 	return nil
 }
 
+// BulkReplaceSummaries deletes summaries matching delKeys then batch-creates new ones.
+func (r *DailyRepo) BulkReplaceSummaries(ctx context.Context, delKeys [][]interface{}, summaries []model.DailySummary) error {
+	if len(delKeys) > 0 {
+		r.db.WithContext(ctx).Where("(member_id, daily_date) IN ?", delKeys).Delete(&model.DailySummary{})
+	}
+	if len(summaries) > 0 {
+		return r.db.WithContext(ctx).Create(&summaries).Error
+	}
+	return nil
+}
+
 // FindExistingImportKeys returns member_id+daily_date pairs for existing import entries.
 func (r *DailyRepo) FindExistingImportKeys(ctx context.Context) (map[[2]interface{}]bool, error) {
 	var existing []model.DailyEntry

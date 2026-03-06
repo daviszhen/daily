@@ -221,15 +221,20 @@ func (s *ImportService) Confirm(ctx context.Context, entries []ExtractedEntry, m
 		}
 		s.dailyRepo.BulkReplaceImportEntries(ctx, delKeys, savedEntries)
 
-		// Also upsert summaries so imported data appears in reports/queries
+		// Bulk replace summaries (was 2645 individual UpsertSummary calls)
+		var summaries []model.DailySummary
 		for _, v := range valid {
-			s.dailyRepo.UpsertSummary(ctx, v.memberID, v.date, v.content, "")
+			summaries = append(summaries, model.DailySummary{
+				MemberID: v.memberID, DailyDate: v.date, Summary: v.content,
+			})
 		}
+		s.dailyRepo.BulkReplaceSummaries(ctx, delKeys, summaries)
 	}
 
-	// Catalog sync
+	// Catalog sync — use background context so frontend disconnect won't cancel it
+	bgCtx := context.Background()
 	if len(savedEntries) > 0 && s.catalogSync != nil && s.catalogSync.Ready() {
-		s.catalogSync.SyncDailyEntries(ctx, savedEntries)
+		s.catalogSync.SyncDailyEntries(bgCtx, savedEntries)
 	}
 
 	// Extract topics async
