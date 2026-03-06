@@ -24,6 +24,7 @@ func newBrowser(t *testing.T, timeout time.Duration) *browser {
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("headless", true),
 		chromedp.Flag("no-sandbox", true),
+		chromedp.WindowSize(1280, 900),
 	)
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(), opts...)
 	ctx, ctxCancel := chromedp.NewContext(allocCtx)
@@ -122,7 +123,7 @@ func TestLogin(t *testing.T) {
 	defer b.close()
 
 	b.run(chromedp.Navigate(baseURL), chromedp.Sleep(2*time.Second))
-	if !strings.Contains(b.bodyText(), "登录以继续") {
+	if !strings.Contains(b.bodyText(), "欢迎回来") {
 		t.Fatal("login page not shown")
 	}
 

@@ -1,0 +1,67 @@
+{
+  "version": "2026-03-06",
+  "note": "优化记录基准。测试会对比实际结果，超出阈值则 warn。",
+  "report_validate": {
+    "description": "ValidateAndAssess 合并后，日报验证一次 LLM 调用完成",
+    "cases": [
+      {
+        "name": "闲聊拒绝",
+        "input": "你觉得今天天气怎么样",
+        "expect_valid": false,
+        "max_seconds": 5
+      },
+      {
+        "name": "内容不够具体",
+        "input": "修了个bug",
+        "expect_valid": true,
+        "expect_sufficient": false,
+        "max_seconds": 5
+      },
+      {
+        "name": "内容具体通过",
+        "input": "修复了登录页面验证码不刷新的bug，原因是缓存key没有加时间戳",
+        "expect_valid": true,
+        "expect_sufficient": true,
+        "max_seconds": 10
+      }
+    ]
+  },
+  "data_asking": {
+    "description": "Data Asking 6张表，topic/团队查询可用",
+    "cases": [
+      {
+        "name": "topic查询",
+        "input": "哪个topic持续时间最长",
+        "expect_has_answer": true,
+        "max_seconds": 180
+      },
+      {
+        "name": "团队查询",
+        "input": "每个团队有多少人",
+        "expect_has_answer": true,
+        "max_seconds": 180
+      }
+    ]
+  },
+  "merge_summary": {
+    "description": "MergeDailySummary 多次提交合并，带时间戳+原文，支持作废覆盖",
+    "cases": [
+      {
+        "name": "正常合并",
+        "date": "2026-02-25",
+        "entries": ["完成了登录模块的单元测试，覆盖了用户名密码校验和token生成逻辑", "修复了导出功能的编码问题，原因是UTF-8 BOM头缺失导致Excel乱码"],
+        "expect_contains": ["登录", "导出"],
+        "expect_not_contains": [],
+        "max_seconds": 30
+      },
+      {
+        "name": "作废覆盖",
+        "date": "2026-02-26",
+        "entries": ["完成了A模块的接口重构，统一了错误码和返回格式", "前面说错了，作废，以这次为准。今天实际做的是B模块的性能优化，把查询耗时从3秒降到了500毫秒"],
+        "expect_contains": ["B模块"],
+        "expect_not_contains": ["A模块"],
+        "max_seconds": 30
+      }
+    ]
+  }
+}

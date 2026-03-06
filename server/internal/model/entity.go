@@ -69,6 +69,16 @@ func (DailyEntry) TableName() string      { return "daily_entries" }
 func (Member) TableName() string          { return "members" }
 func (TopicActivity) TableName() string   { return "topic_activities" }
 func (Topic) TableName() string           { return "topics" }
+func (Feedback) TableName() string        { return "feedback" }
+
+type Feedback struct {
+	ID         int       `gorm:"primaryKey" json:"id"`
+	MemberID   int       `json:"member_id"`
+	MemberName string    `json:"member_name"`
+	Content    string    `json:"content"`
+	Status     string    `gorm:"default:open" json:"status"` // open / closed
+	CreatedAt  time.Time `json:"created_at"`
+}
 
 // ActiveMembers is a GORM scope that excludes logically deleted members.
 // Use: db.Scopes(model.ActiveMembers).Find(&members)

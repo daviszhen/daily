@@ -31,6 +31,10 @@ func (s *DailyService) UpdateDailySummary(ctx context.Context, memberID int, dat
 	return s.repo.UpsertSummary(ctx, memberID, date, summary, risk)
 }
 
+func (s *DailyService) GetDayEntries(ctx context.Context, memberID int, date string) ([]model.DailyEntry, error) {
+	return s.repo.GetDayEntries(ctx, memberID, date)
+}
+
 func (s *DailyService) GetDailySummary(ctx context.Context, memberID int, date string, out *model.DailySummary) error {
 	got, err := s.repo.GetSummary(ctx, memberID, date)
 	if err != nil {

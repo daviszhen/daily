@@ -3,6 +3,7 @@ export type User = {
   name: string;
   avatar: string;
   role: string;
+  is_admin?: boolean;
 };
 
 export type MessageType = 'text' | 'system' | 'summary_confirm';

@@ -18,11 +18,30 @@ func (r *TopicRepo) BatchCreate(ctx context.Context, items []model.TopicActivity
 	if len(items) == 0 {
 		return nil
 	}
-	return r.db.WithContext(ctx).Create(&items).Error
+	if err := r.db.WithContext(ctx).Create(&items).Error; err != nil {
+		return err
+	}
+	// Auto-reopen resolved topics that have new activity after resolved_at
+	topicNames := map[string]string{} // name -> max date
+	for _, item := range items {
+		if item.DailyDate > topicNames[item.Topic] {
+			topicNames[item.Topic] = item.DailyDate
+		}
+	}
+	for name, maxDate := range topicNames {
+		r.db.WithContext(ctx).Model(&model.Topic{}).
+			Where("name = ? AND status = 'resolved' AND resolved_at IS NOT NULL AND resolved_at < ?", name, maxDate).
+			Updates(map[string]interface{}{"status": "active", "resolved_at": nil})
+	}
+	return nil
 }
 
 func (r *TopicRepo) DeleteByEntryID(ctx context.Context, entryID int) error {
 	return r.db.WithContext(ctx).Where("entry_id = ?", entryID).Delete(&model.TopicActivity{}).Error
+}
+
+func (r *TopicRepo) DeleteByEntryIDs(ctx context.Context, entryIDs []int) error {
+	return r.db.WithContext(ctx).Where("entry_id IN ?", entryIDs).Delete(&model.TopicActivity{}).Error
 }
 
 func (r *TopicRepo) ListDistinctTopics(ctx context.Context) ([]string, error) {

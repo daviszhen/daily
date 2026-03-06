@@ -29,38 +29,38 @@ function LoginPage({ onLogin }: { onLogin: (user: User) => void }): React.ReactE
   }
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#FAF9F6', fontFamily: "'Inter', sans-serif" }}>
+    <div className="min-h-screen flex" style={{ background: 'var(--bg-page)', fontFamily: "'Inter', sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
 
       {/* Left brand panel */}
       <div className="hidden lg:flex flex-col justify-center w-1/2 px-16 py-12 relative">
-        <div className="absolute right-0 top-[10%] h-[80%] w-px" style={{ background: 'linear-gradient(to bottom, transparent, #D4C5A9 30%, #D4C5A9 70%, transparent)' }} />
+        <div className="absolute right-0 top-[10%] h-[80%] w-px" style={{ background: 'linear-gradient(to bottom, transparent, var(--accent-dot) 30%, var(--accent-dot) 70%, transparent)' }} />
 
         {/* Top-left logo */}
         <div className="absolute top-12 left-16 flex items-center gap-3">
           <img src="/mo-logo.png" alt="MatrixOrigin" className="h-10 opacity-80" />
-          <span className="text-xs font-semibold tracking-[3px] uppercase" style={{ color: '#2C2C2C' }}>MatrixOrigin</span>
+          <span className="text-xs font-semibold tracking-[3px] uppercase" style={{ color: 'var(--text-primary)' }}>MatrixOrigin</span>
         </div>
 
         {/* Center content */}
         <div>
           <div className="flex items-center gap-4 mb-4">
-            <span className="text-5xl font-semibold" style={{ fontFamily: "'Playfair Display', serif", color: '#2C2C2C', letterSpacing: '-1px' }}>智能日报</span>
+            <span className="text-5xl font-semibold" style={{ fontFamily: "'Playfair Display', serif", color: 'var(--text-primary)', letterSpacing: '-1px' }}>智能日报</span>
           </div>
-          <p className="text-base leading-relaxed mb-12" style={{ color: '#8B7E6A', fontWeight: 300, letterSpacing: '2px' }}>
+          <p className="text-base leading-relaxed mb-12" style={{ color: 'var(--text-secondary)', fontWeight: 300, letterSpacing: '2px' }}>
             以智驭繁 · 日有所记 · 事有所察
           </p>
           <div className="flex flex-col gap-4">
             {['LLM 流式摘要生成', '自然语言数据查询', '智能周报一键生成'].map(f => (
-              <div key={f} className="flex items-center gap-3 text-sm" style={{ color: '#A09484' }}>
-                <span style={{ fontSize: '6px', color: '#D4C5A9' }}>◆</span>
+              <div key={f} className="flex items-center gap-3 text-sm" style={{ color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: '6px', color: 'var(--accent-dot)' }}>◆</span>
                 {f}
               </div>
             ))}
           </div>
         </div>
 
-        <p className="absolute bottom-12 left-16 text-xs" style={{ color: '#C4B8A4' }}>© 2026 矩阵起源 MatrixOrigin</p>
+        <p className="absolute bottom-12 left-16 text-xs" style={{ color: 'var(--text-faint)' }}>© 2026 矩阵起源 MatrixOrigin</p>
       </div>
 
       {/* Right login panel */}
@@ -70,18 +70,18 @@ function LoginPage({ onLogin }: { onLogin: (user: User) => void }): React.ReactE
           {/* Mobile logo */}
           <div className="lg:hidden flex flex-col items-center mb-10">
             <img src="/mo-logo.png" alt="MatrixOrigin" className="h-14 mb-3" />
-            <span className="text-2xl font-semibold" style={{ fontFamily: "'Playfair Display', serif", color: '#2C2C2C' }}>智能日报</span>
-            <p className="text-xs mt-1" style={{ color: '#A09484', letterSpacing: '2px' }}>以智驭繁 · 日有所记 · 事有所察</p>
+            <span className="text-2xl font-semibold" style={{ fontFamily: "'Playfair Display', serif", color: 'var(--text-primary)' }}>智能日报</span>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)', letterSpacing: '2px' }}>以智驭繁 · 日有所记 · 事有所察</p>
           </div>
 
           <div className="mb-10 hidden lg:block">
-            <h1 className="text-3xl font-medium mb-2" style={{ fontFamily: "'Playfair Display', serif", color: '#2C2C2C' }}>欢迎回来</h1>
-            <p className="text-sm" style={{ color: '#A09484' }}>登录您的账号以继续</p>
+            <h1 className="text-3xl font-medium mb-2" style={{ fontFamily: "'Playfair Display', serif", color: 'var(--text-primary)' }}>欢迎回来</h1>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>登录您的账号以继续</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-7">
             <div>
-              <label className="block text-xs font-semibold mb-2 tracking-[1.5px] uppercase" style={{ color: '#8B7E6A' }}>用户名</label>
+              <label className="block text-xs font-semibold mb-2 tracking-[1.5px] uppercase" style={{ color: 'var(--text-secondary)' }}>用户名</label>
               <input
                 type="text"
                 value={username}
@@ -89,13 +89,13 @@ function LoginPage({ onLogin }: { onLogin: (user: User) => void }): React.ReactE
                 placeholder="请输入用户名"
                 autoFocus
                 className="w-full py-3 text-sm focus:outline-none transition-all bg-transparent"
-                style={{ border: 'none', borderBottom: '2px solid #E5DDD0', color: '#2C2C2C', WebkitBoxShadow: '0 0 0 30px #FAF9F6 inset' }}
-                onFocus={e => e.target.style.borderBottomColor = '#2C2C2C'}
-                onBlur={e => e.target.style.borderBottomColor = '#E5DDD0'}
+                style={{ border: 'none', borderBottom: '2px solid var(--border)', color: 'var(--text-primary)', WebkitBoxShadow: '0 0 0 30px var(--bg-page) inset' }}
+                onFocus={e => e.target.style.borderBottomColor = 'var(--text-primary)'}
+                onBlur={e => e.target.style.borderBottomColor = 'var(--border)'}
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold mb-2 tracking-[1.5px] uppercase" style={{ color: '#8B7E6A' }}>密码</label>
+              <label className="block text-xs font-semibold mb-2 tracking-[1.5px] uppercase" style={{ color: 'var(--text-secondary)' }}>密码</label>
               <div className="relative">
                 <input
                   type={showPwd ? 'text' : 'password'}
@@ -103,13 +103,13 @@ function LoginPage({ onLogin }: { onLogin: (user: User) => void }): React.ReactE
                   onChange={e => setPassword(e.target.value)}
                   placeholder="请输入密码"
                   className="w-full py-3 pr-10 text-sm focus:outline-none transition-all bg-transparent"
-                  style={{ border: 'none', borderBottom: '2px solid #E5DDD0', color: '#2C2C2C', WebkitBoxShadow: '0 0 0 30px #FAF9F6 inset' }}
-                  onFocus={e => e.target.style.borderBottomColor = '#2C2C2C'}
-                  onBlur={e => e.target.style.borderBottomColor = '#E5DDD0'}
+                  style={{ border: 'none', borderBottom: '2px solid var(--border)', color: 'var(--text-primary)', WebkitBoxShadow: '0 0 0 30px var(--bg-page) inset' }}
+                  onFocus={e => e.target.style.borderBottomColor = 'var(--text-primary)'}
+                  onBlur={e => e.target.style.borderBottomColor = 'var(--border)'}
                 />
                 <button type="button" onClick={() => setShowPwd(v => !v)}
                   className="absolute right-0 top-1/2 -translate-y-1/2 transition-opacity hover:opacity-70"
-                  style={{ color: '#A09484' }}>
+                  style={{ color: 'var(--text-muted)' }}>
                   {showPwd ? (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                   ) : (
@@ -127,18 +127,18 @@ function LoginPage({ onLogin }: { onLogin: (user: User) => void }): React.ReactE
 
             <button
               type="submit"
-              disabled={loading || !username || !password}
-              className="w-full py-4 text-sm font-medium text-white mt-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.99]"
-              style={{ background: '#2C2C2C', borderRadius: '8px', fontFamily: "'Playfair Display', serif", letterSpacing: '2px' }}
+              disabled={loading}
+              className="w-full py-4 text-sm font-medium mt-2 transition-all disabled:cursor-not-allowed hover:opacity-90 active:scale-[0.99]"
+              style={{ background: loading ? 'var(--text-muted)' : 'var(--btn-primary)', color: 'var(--btn-primary-text)', borderRadius: '8px', fontFamily: "'Playfair Display', serif", letterSpacing: '2px' }}
             >
               {loading ? '登录中...' : '登 录'}
             </button>
           </form>
 
-          <p className="text-center text-xs mt-8" style={{ color: '#C4B8A4', lineHeight: 2 }}>
+          <p className="text-center text-xs mt-8" style={{ color: 'var(--text-faint)', lineHeight: 2 }}>
             测试账号：test / 123456
           </p>
-          <p className="text-center text-xs" style={{ color: '#C4B8A4' }}>
+          <p className="text-center text-xs" style={{ color: 'var(--text-faint)' }}>
             Powered by MatrixOne Intelligence
           </p>
         </div>
@@ -188,11 +188,16 @@ export default function App(): React.ReactElement {
   }
 
   if (!loggedIn) {
-    return <LoginPage onLogin={(u) => { setUser(u); setFadeIn(false); setLoggedIn(true); }} />;
+    document.documentElement.setAttribute('data-theme', 'light');
+    return <LoginPage onLogin={(u) => {
+      document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'warm');
+      setUser(u); setFadeIn(false); setLoggedIn(true);
+    }} />;
   }
 
   function handleSupplement(date: string) {
-    setSupplementDate(date);
+    const today = new Date().toLocaleDateString('sv-SE');
+    setSupplementDate(date === today ? '__today__' : date);
     setSessionId(null);
     setCurrentView('chat');
   }

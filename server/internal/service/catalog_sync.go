@@ -78,6 +78,29 @@ func (s *CatalogSync) discover(catalogID int64, dbName string) {
 	logger.Info("catalog: discovered", "database_id", s.databaseID, "tables", s.tableIDs)
 }
 
+// TruncateAll clears all Catalog table data before full sync to avoid duplicates.
+func (s *CatalogSync) TruncateAll() {
+	if !s.ready {
+		return
+	}
+	ctx := context.Background()
+	for _, name := range syncTables {
+		id, ok := s.tableIDs[name]
+		if !ok {
+			continue
+		}
+		if _, err := s.raw.TruncateTable(ctx, &sdk.TableTruncateRequest{TableID: id}); err != nil {
+			logger.Warn("catalog: truncate failed, will retry", "table", name, "err", err)
+			// Retry once after short delay (task lock may release)
+			time.Sleep(3 * time.Second)
+			if _, err := s.raw.TruncateTable(ctx, &sdk.TableTruncateRequest{TableID: id}); err != nil {
+				logger.Warn("catalog: truncate retry failed", "table", name, "err", err)
+			}
+		}
+	}
+	logger.Info("catalog: truncated all tables")
+}
+
 // syncTables lists tables to sync to Catalog. Order matters for display.
 var syncTables = []string{"members", "teams", "daily_entries", "daily_summaries", "topics", "topic_activities"}
 
@@ -296,7 +319,7 @@ func (s *CatalogSync) SyncMembers(ctx context.Context, members []MemberRow) {
 	}
 	var buf bytes.Buffer
 	for _, m := range members {
-		fmt.Fprintf(&buf, "%d,%s,,%s,,,%s\n", m.ID, m.Username, esc(m.Name), esc(m.Team))
+		fmt.Fprintf(&buf, "%d,%s,,%s,,%s,%s,%d,%s,%v\n", m.ID, m.Username, esc(m.Name), esc(m.Role), esc(m.Team), m.TeamID, m.Status, m.IsAdmin)
 	}
 	s.importCSV(ctx, s.tableIDs["members"], buf.String(), "members.csv",
 		[]sdk.FileAndTableColumnMapping{
@@ -307,6 +330,9 @@ func (s *CatalogSync) SyncMembers(ctx context.Context, members []MemberRow) {
 			{TableColumn: "avatar", Column: "avatar", ColNumInFile: 5},
 			{TableColumn: "role", Column: "role", ColNumInFile: 6},
 			{TableColumn: "team", Column: "team", ColNumInFile: 7},
+			{TableColumn: "team_id", Column: "team_id", ColNumInFile: 8},
+			{TableColumn: "status", Column: "status", ColNumInFile: 9},
+			{TableColumn: "is_admin", Column: "is_admin", ColNumInFile: 10},
 		})
 }
 
@@ -314,13 +340,17 @@ type MemberRow struct {
 	ID       int
 	Username string
 	Name     string
+	Role     string
 	Team     string
+	TeamID   int
+	Status   string
+	IsAdmin  bool
 }
 
 func (s *CatalogSync) SyncAllMembers(members []model.Member) {
 	var rows []MemberRow
 	for _, m := range members {
-		rows = append(rows, MemberRow{ID: m.ID, Username: m.Username, Name: m.Name, Team: m.Team})
+		rows = append(rows, MemberRow{ID: m.ID, Username: m.Username, Name: m.Name, Role: m.Role, Team: m.Team, TeamID: m.TeamID, Status: m.Status, IsAdmin: m.IsAdmin})
 	}
 	s.SyncMembers(context.Background(), rows)
 }
@@ -348,8 +378,26 @@ func (s *CatalogSync) SyncAllTeams(teams []model.Team) {
 
 // SyncAllEntries 全量同步 daily_entries 到 Catalog
 func (s *CatalogSync) SyncAllEntries(entries []model.DailyEntry) {
+	if !s.ready || len(entries) == 0 {
+		return
+	}
 	logger.Info("catalog sync: full entries sync", "count", len(entries))
-	s.SyncDailyEntries(context.Background(), entries)
+	now := time.Now().Format("2006-01-02 15:04:05")
+	var buf bytes.Buffer
+	for _, e := range entries {
+		fmt.Fprintf(&buf, "%d,%d,%s,%s,%s,%s,%s\n",
+			e.ID, e.MemberID, dateOnly(e.DailyDate), esc(e.Content), esc(e.Summary), e.Source, now)
+	}
+	s.importCSV(context.Background(), s.tableIDs["daily_entries"], buf.String(), "all_entries.csv",
+		[]sdk.FileAndTableColumnMapping{
+			{TableColumn: "id", Column: "id", ColNumInFile: 1},
+			{TableColumn: "member_id", Column: "member_id", ColNumInFile: 2},
+			{TableColumn: "daily_date", Column: "daily_date", ColNumInFile: 3},
+			{TableColumn: "content", Column: "content", ColNumInFile: 4},
+			{TableColumn: "summary", Column: "summary", ColNumInFile: 5},
+			{TableColumn: "source", Column: "source", ColNumInFile: 6},
+			{TableColumn: "created_at", Column: "created_at", ColNumInFile: 7},
+		})
 }
 
 func (s *CatalogSync) SyncAllSummaries(summaries []model.DailySummary) {

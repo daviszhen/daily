@@ -62,6 +62,12 @@ func (r *DailyRepo) GetSummary(ctx context.Context, memberID int, date string) (
 }
 
 // GetMemberEntries returns entries for a member in a date range (or last 7 days if empty).
+func (r *DailyRepo) GetDayEntries(ctx context.Context, memberID int, date string) ([]model.DailyEntry, error) {
+	var entries []model.DailyEntry
+	err := r.db.WithContext(ctx).Where("member_id = ? AND daily_date = ?", memberID, date).Order("created_at").Find(&entries).Error
+	return entries, err
+}
+
 func (r *DailyRepo) GetMemberEntries(ctx context.Context, memberID int, start, end string) ([]model.DailyEntry, error) {
 	var entries []model.DailyEntry
 	q := r.db.WithContext(ctx).Where("member_id = ?", memberID)

@@ -73,8 +73,8 @@ export function Stats(): React.ReactElement {
     <div className="h-full overflow-y-auto">
     <div className="max-w-5xl mx-auto w-full px-4 py-8 space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight" style={{ color: '#2C2C2C' }}>数据洞察</h1>
-        <p className="text-sm mt-1" style={{ color: '#8B7E6A' }}>近 90 天活跃 Topic 风险看板。标记已解决的 Topic 将从看板移除。</p>
+        <h1 className="text-2xl font-semibold tracking-tight" style={{ color: 'var(--text-primary)' }}>数据洞察</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>近 90 天活跃 Topic 风险看板。标记已解决的 Topic 将从看板移除。</p>
       </div>
 
       {/* Summary cards */}
@@ -86,11 +86,11 @@ export function Stats(): React.ReactElement {
         ].map(c => (
           <button key={c.label} onClick={() => setFilter(c.f)}
             className="p-5 rounded-xl text-left transition-shadow"
-            style={{ background: filter === c.f ? '#F5F0E8' : '#FFFCF8', border: filter === c.f ? '2px solid #2C2C2C' : '1px solid #E5DDD0' }}>
+            style={{ background: filter === c.f ? 'var(--bg-sidebar)' : 'var(--bg-card)', border: filter === c.f ? '2px solid var(--btn-primary)' : '1px solid var(--border)' }}>
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm font-medium mb-1" style={{ color: '#8B7E6A' }}>{c.label}</p>
-                <h3 className="text-2xl font-bold tracking-tight" style={{ color: '#2C2C2C' }}>{c.value}</h3>
+                <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>{c.label}</p>
+                <h3 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>{c.value}</h3>
               </div>
               <div className={`p-2 rounded-lg ${c.color}`}><c.icon size={20} className="opacity-80" /></div>
             </div>
@@ -101,11 +101,11 @@ export function Stats(): React.ReactElement {
       {/* Toolbar: sort + batch actions */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3 text-sm">
-          <span style={{ color: '#8B7E6A' }}>排序：</span>
+          <span style={{ color: 'var(--text-secondary)' }}>排序：</span>
           {([['days', '活跃天数'], ['member_count', '参与人数'], ['entry_count', '记录数']] as [SortKey, string][]).map(([k, label]) => (
             <button key={k} onClick={() => setSortKey(k)}
               className="px-3 py-1 rounded-full text-sm transition-colors"
-              style={sortKey === k ? { background: '#2C2C2C', color: '#fff' } : { background: '#F5F0E8', color: '#6B5E4F' }}>
+              style={sortKey === k ? { background: 'var(--btn-primary)', color: '#fff' } : { background: 'var(--bg-sidebar)', color: 'var(--text-dim)' }}>
               {label}
             </button>
           ))}
@@ -113,7 +113,7 @@ export function Stats(): React.ReactElement {
         {selected.size > 0 && (
           <button onClick={handleBatchResolve}
             className="px-4 py-1.5 rounded-lg text-sm font-medium transition-colors"
-            style={{ background: '#2C2C2C', color: '#fff' }}>
+            style={{ background: 'var(--btn-primary)', color: '#fff' }}>
             批量标记已解决（{selected.size}）
           </button>
         )}
@@ -121,15 +121,15 @@ export function Stats(): React.ReactElement {
 
       {/* Topic list */}
       {loading ? (
-        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="animate-pulse h-14 rounded-xl" style={{ background: '#F0EBE3' }} />)}</div>
+        <div className="space-y-3">{[1,2,3].map(i => <div key={i} className="animate-pulse h-14 rounded-xl" style={{ background: 'var(--bg-accent)' }} />)}</div>
       ) : paged.length === 0 ? (
-        <div className="text-sm text-center py-16" style={{ color: '#A09484' }}>
+        <div className="text-sm text-center py-16" style={{ color: 'var(--text-muted)' }}>
           {filter !== 'all' ? '该风险等级下暂无 Topic' : '暂无 Topic 数据'}
         </div>
       ) : (
         <div className="space-y-2">
           {/* Select all */}
-          <label className="flex items-center space-x-2 px-2 text-xs cursor-pointer" style={{ color: '#8B7E6A' }}>
+          <label className="flex items-center space-x-2 px-2 text-xs cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
             <input type="checkbox" checked={selected.size === paged.length && paged.length > 0}
               onChange={toggleSelectAll} className="rounded" />
             <span>全选当页</span>
@@ -142,7 +142,7 @@ export function Stats(): React.ReactElement {
             const isRenaming = renaming === item.topic_id;
             return (
               <div key={item.topic_id} className="rounded-xl overflow-hidden transition-shadow"
-                style={{ background: isSelected ? '#F5F0E8' : '#FFFCF8', border: '1px solid #E5DDD0' }}>
+                style={{ background: isSelected ? 'var(--bg-sidebar)' : 'var(--bg-card)', border: '1px solid var(--border)' }}>
                 <div className="px-4 py-3 flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(item.topic_id)}
@@ -154,17 +154,17 @@ export function Stats(): React.ReactElement {
                       <div className="flex items-center space-x-1" onClick={e => e.stopPropagation()}>
                         <input value={renameValue} onChange={e => setRenameValue(e.target.value)}
                           onKeyDown={e => e.key === 'Enter' && handleRename(item.topic_id)}
-                          className="text-sm px-2 py-0.5 rounded focus:outline-none" style={{ border: '1px solid #E5DDD0', width: 160 }}
+                          className="text-sm px-2 py-0.5 rounded focus:outline-none" style={{ border: '1px solid var(--border)', width: 160 }}
                           autoFocus />
                         <button onClick={() => handleRename(item.topic_id)} className="p-0.5 text-green-600"><Check size={14} /></button>
-                        <button onClick={() => setRenaming(null)} className="p-0.5" style={{ color: '#A09484' }}><X size={14} /></button>
+                        <button onClick={() => setRenaming(null)} className="p-0.5" style={{ color: 'var(--text-muted)' }}><X size={14} /></button>
                       </div>
                     ) : (
-                      <span className="font-medium text-sm cursor-pointer" style={{ color: '#2C2C2C' }}
+                      <span className="font-medium text-sm cursor-pointer" style={{ color: 'var(--text-primary)' }}
                         onClick={() => toggleExpand(item.topic)}>{item.topic}</span>
                     )}
                   </div>
-                  <div className="flex items-center space-x-3 text-xs" style={{ color: '#8B7E6A' }}>
+                  <div className="flex items-center space-x-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
                     <span className="flex items-center space-x-1"><Clock size={12} /><span>活跃 {item.days} 天</span></span>
                     <span className="flex items-center space-x-1"><Users size={12} /><span>{item.member_count} 人</span></span>
                     <span>{item.entry_count} 条</span>
@@ -180,13 +180,13 @@ export function Stats(): React.ReactElement {
                   </div>
                 </div>
                 {isExpanded && (
-                  <div className="px-4 pb-3 space-y-2" style={{ borderTop: '1px solid #F0EBE3' }}>
-                    <div className="pt-2 text-xs" style={{ color: '#8B7E6A' }}>
+                  <div className="px-4 pb-3 space-y-2" style={{ borderTop: '1px solid var(--border-light)' }}>
+                    <div className="pt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
                       首次: {item.first_date?.slice(0, 10)} → 最近: {item.last_date?.slice(0, 10)}
                     </div>
                     {item.risks && item.risks.length > 0 && (
                       <div className="space-y-1">
-                        <div className="text-xs font-medium" style={{ color: '#6B5E4F' }}>关联风险项：</div>
+                        <div className="text-xs font-medium" style={{ color: 'var(--text-dim)' }}>关联风险项：</div>
                         {item.risks.map((r, i) => (
                           <div key={i} className="text-xs px-3 py-2 rounded-lg bg-red-50">
                             <span className="font-medium text-red-700">{r.member_name}</span>
@@ -211,11 +211,11 @@ export function Stats(): React.ReactElement {
         <div className="flex items-center justify-center space-x-2 text-sm pt-2">
           <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
             className="px-3 py-1 rounded transition-colors disabled:opacity-30"
-            style={{ background: '#F5F0E8', color: '#6B5E4F' }}>上一页</button>
-          <span style={{ color: '#8B7E6A' }}>{page + 1} / {totalPages}</span>
+            style={{ background: 'var(--bg-sidebar)', color: 'var(--text-dim)' }}>上一页</button>
+          <span style={{ color: 'var(--text-secondary)' }}>{page + 1} / {totalPages}</span>
           <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
             className="px-3 py-1 rounded transition-colors disabled:opacity-30"
-            style={{ background: '#F5F0E8', color: '#6B5E4F' }}>下一页</button>
+            style={{ background: 'var(--bg-sidebar)', color: 'var(--text-dim)' }}>下一页</button>
         </div>
       )}
     </div>

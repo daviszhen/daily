@@ -26,13 +26,13 @@ export function ConfirmModal({ open, title, message, inputMode, inputPlaceholder
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.3)' }} onClick={onCancel}>
       <div className="bg-white rounded-xl shadow-lg p-6 w-96" onClick={e => e.stopPropagation()}>
-        <h3 className="text-base font-semibold mb-2" style={{ color: '#2C2C2C' }}>{title}</h3>
-        {message && <p className="text-sm mb-4" style={{ color: '#6B5E4F' }}>{message}</p>}
+        <h3 className="text-base font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>{title}</h3>
+        {message && <p className="text-sm mb-4" style={{ color: 'var(--text-dim)' }}>{message}</p>}
         {inputMode && (
           <input
             ref={inputRef}
             className="w-full rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none"
-            style={{ border: '1px solid #E5DDD0' }}
+            style={{ border: '1px solid var(--border)' }}
             placeholder={inputPlaceholder}
             value={value}
             onChange={e => setValue(e.target.value)}
@@ -40,14 +40,14 @@ export function ConfirmModal({ open, title, message, inputMode, inputPlaceholder
           />
         )}
         <div className="flex justify-end space-x-3">
-          <button onClick={onCancel} className="px-4 py-1.5 text-sm rounded-lg transition-colors" style={{ color: '#6B5E4F', border: '1px solid #E5DDD0' }}>
+          <button onClick={onCancel} className="px-4 py-1.5 text-sm rounded-lg transition-colors" style={{ color: 'var(--text-dim)', border: '1px solid var(--border)' }}>
             {cancelText}
           </button>
           <button
             onClick={() => onConfirm(inputMode ? value.trim() : undefined)}
             disabled={inputMode && !value.trim()}
             className="px-4 py-1.5 text-sm rounded-lg text-white transition-colors disabled:opacity-40"
-            style={{ background: danger ? '#dc2626' : '#2C2C2C' }}
+            style={{ background: danger ? '#dc2626' : 'var(--btn-primary)' }}
           >
             {confirmText}
           </button>

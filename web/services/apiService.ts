@@ -394,3 +394,27 @@ export async function getDaySummary(date: string): Promise<DaySummary> {
   const res = await apiFetch(`/api/calendar/day?date=${date}`);
   return res.json();
 }
+
+// ============ Feedback ============
+
+export interface FeedbackItem {
+  id: number; member_id: number; member_name: string; content: string; status: string; created_at: string;
+}
+
+export async function submitFeedback(content: string): Promise<FeedbackItem> {
+  const res = await apiFetch('/api/feedback', { method: 'POST', body: JSON.stringify({ content }) });
+  return res.json();
+}
+
+export async function listFeedback(): Promise<FeedbackItem[]> {
+  const res = await apiFetch('/api/feedback');
+  return res.json();
+}
+
+export async function closeFeedback(id: number): Promise<void> {
+  await apiFetch(`/api/feedback/${id}/close`, { method: 'PUT' });
+}
+
+export async function deleteFeedback(id: number): Promise<void> {
+  await apiFetch(`/api/feedback/${id}`, { method: 'DELETE' });
+}

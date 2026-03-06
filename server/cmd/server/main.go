@@ -47,6 +47,7 @@ func main() {
 	// Auto-create topic_activities table if not exists
 	db.Exec("CREATE TABLE IF NOT EXISTS topic_activities (id INT AUTO_INCREMENT PRIMARY KEY, topic VARCHAR(100) NOT NULL, member_id INT NOT NULL, member_name VARCHAR(50) NOT NULL, daily_date DATE NOT NULL, content TEXT, entry_id INT DEFAULT 0, INDEX idx_topic (topic), INDEX idx_daily_date (daily_date))")
 	db.Exec("CREATE TABLE IF NOT EXISTS topics (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL UNIQUE, description TEXT DEFAULT '', status VARCHAR(20) DEFAULT 'active', created_at DATETIME DEFAULT NOW(), resolved_at DATETIME DEFAULT NULL)")
+	db.Exec("CREATE TABLE IF NOT EXISTS feedback (id INT AUTO_INCREMENT PRIMARY KEY, member_id INT NOT NULL, member_name VARCHAR(50) NOT NULL, content TEXT NOT NULL, status VARCHAR(20) DEFAULT 'open', created_at DATETIME DEFAULT NOW())")
 
 	raw, err := cfg.NewRawClient()
 	if err != nil {
@@ -75,6 +76,7 @@ func main() {
 	if catalogSync != nil && catalogSync.Ready() {
 		go func() {
 			catalogSync.SyncSchemaFromDB(db)
+			catalogSync.TruncateAll()
 
 			members, _ := memberRepo.ListActive(context.Background())
 			catalogSync.SyncAllMembers(members)
@@ -280,6 +282,12 @@ func main() {
 	api.GET("/export/daily", exportH.ExportDaily)
 	api.GET("/calendar", calendarH.Calendar)
 	api.GET("/calendar/day", calendarH.DaySummary)
+	// Feedback
+	fbH := handler.NewFeedbackHandler(db)
+	api.POST("/feedback", fbH.Submit)
+	api.GET("/feedback", fbH.List)
+	admin.PUT("/feedback/:id/close", fbH.Close)
+	admin.DELETE("/feedback/:id", fbH.Delete)
 
 	distFS, _ := fs.Sub(staticFS, "dist")
 	r.NoRoute(gin.WrapH(http.FileServer(http.FS(distFS))))

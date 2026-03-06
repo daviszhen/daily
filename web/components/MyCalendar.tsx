@@ -63,34 +63,34 @@ export function MyCalendar({ onSupplement }: Props): React.ReactElement {
   const selectedDay = days.find(d => d.date === selected);
 
   return (
-    <div className="h-full overflow-y-auto" style={{ background: '#FAF9F6' }}>
+    <div className="h-full overflow-y-auto" style={{ background: 'var(--bg-page)' }}>
       <div className="max-w-2xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-semibold" style={{ color: '#2C2C2C' }}>我的日历</h1>
+          <h1 className="text-xl font-semibold" style={{ color: 'var(--text-primary)' }}>我的日历</h1>
           <div className="flex items-center space-x-3">
-            <button onClick={() => changeMonth(-1)} className="p-2 rounded-lg hover:bg-[#E5DDD0] transition-all active:scale-95 cursor-pointer" style={{ color: '#6B5E4F' }}>
+            <button onClick={() => changeMonth(-1)} className="p-2 rounded-lg hover:bg-[var(--bg-active)] transition-all active:scale-95 cursor-pointer" style={{ color: 'var(--text-dim)' }}>
               <ChevronLeft size={20} />
             </button>
-            <span className="text-base font-medium min-w-[120px] text-center select-none" style={{ color: '#2C2C2C' }}>
+            <span className="text-base font-medium min-w-[120px] text-center select-none" style={{ color: 'var(--text-primary)' }}>
               {month.replace('-', ' 年 ')} 月
             </span>
-            <button onClick={() => changeMonth(1)} className="p-2 rounded-lg hover:bg-[#E5DDD0] transition-all active:scale-95 cursor-pointer" style={{ color: '#6B5E4F' }}>
+            <button onClick={() => changeMonth(1)} className="p-2 rounded-lg hover:bg-[var(--bg-active)] transition-all active:scale-95 cursor-pointer" style={{ color: 'var(--text-dim)' }}>
               <ChevronRight size={20} />
             </button>
           </div>
         </div>
 
         {/* Stats bar */}
-        <div className="rounded-xl px-5 py-3.5 mb-6 flex items-center justify-between" style={{ background: '#F5F0E8' }}>
+        <div className="rounded-xl px-5 py-3.5 mb-6 flex items-center justify-between" style={{ background: 'var(--bg-sidebar)' }}>
           <div className="flex items-center gap-2">
-            <FileText size={16} style={{ color: '#8B7E6A' }} />
-            <span style={{ color: '#6B5E4F' }}>
+            <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
+            <span style={{ color: 'var(--text-dim)' }}>
               工作日 <b className="text-base">{filled}</b> / {workdays} 天已提交
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-20 h-2 rounded-full overflow-hidden" style={{ background: '#E5DDD0' }}>
+            <div className="w-20 h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-active)' }}>
               <div className="h-full rounded-full transition-all duration-500" style={{
                 width: `${rate}%`,
                 background: rate === 100 ? '#5A9A6A' : rate >= 80 ? '#B8A040' : '#C07050',
@@ -103,18 +103,18 @@ export function MyCalendar({ onSupplement }: Props): React.ReactElement {
         </div>
 
         {/* Calendar grid */}
-        <div className="rounded-xl overflow-hidden border shadow-sm" style={{ borderColor: '#E5DDD0', background: '#FFFFFF' }}>
+        <div className="rounded-xl overflow-hidden border shadow-sm" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}>
           {/* Weekday header */}
-          <div className="grid grid-cols-7" style={{ background: '#FAFAF7' }}>
+          <div className="grid grid-cols-7" style={{ background: 'var(--bg-table-head)' }}>
             {WEEKDAYS.map((w, i) => (
-              <div key={w} className="py-2.5 text-center text-xs font-semibold tracking-wide" style={{ color: i === 0 || i === 6 ? '#C07050' : '#8B7E6A' }}>{w}</div>
+              <div key={w} className="py-2.5 text-center text-xs font-semibold tracking-wide" style={{ color: i === 0 || i === 6 ? '#C07050' : 'var(--text-secondary)' }}>{w}</div>
             ))}
           </div>
 
           {/* Day cells */}
           <div className="grid grid-cols-7">
             {grid.map((day, i) => {
-              if (!day) return <div key={`e-${i}`} className="aspect-square border-t" style={{ borderColor: '#F5F0E8', background: '#FDFCFA' }} />;
+              if (!day) return <div key={`e-${i}`} className="aspect-square border-t" style={{ borderColor: 'var(--border-light)', background: 'var(--bg-card)' }} />;
 
               const isFuture = day.date > today;
               const isToday = day.date === today;
@@ -131,9 +131,9 @@ export function MyCalendar({ onSupplement }: Props): React.ReactElement {
                     ${isSelected ? 'z-10' : ''}
                   `}
                   style={{
-                    borderColor: '#F5F0E8',
-                    background: isSelected ? '#F5F0E8' : isFuture ? '#FDFCFA' : 'transparent',
-                    boxShadow: isSelected ? 'inset 0 0 0 2px #8B7E6A' : 'none',
+                    borderColor: 'var(--border-light)',
+                    background: isSelected ? 'var(--bg-sidebar)' : isFuture ? 'var(--bg-card)' : 'transparent',
+                    boxShadow: isSelected ? 'inset 0 0 0 2px var(--text-secondary)' : 'none',
                     borderRadius: isSelected ? '8px' : '0',
                   }}
                 >
@@ -142,8 +142,8 @@ export function MyCalendar({ onSupplement }: Props): React.ReactElement {
                       ${isToday ? 'w-7 h-7 rounded-full text-white' : ''}
                     `}
                     style={{
-                      color: isToday ? '#FFF' : isWeekend && !day.is_workday ? '#C07050' : day.is_workday ? '#2C2C2C' : '#A09484',
-                      background: isToday ? '#2C2C2C' : 'transparent',
+                      color: isToday ? 'var(--btn-primary-text)' : isWeekend && !day.is_workday ? '#C07050' : day.is_workday ? 'var(--text-primary)' : 'var(--text-muted)',
+                      background: isToday ? 'var(--btn-primary)' : 'transparent',
                     }}
                   >
                     {parseInt(day.date.slice(8))}
@@ -169,22 +169,22 @@ export function MyCalendar({ onSupplement }: Props): React.ReactElement {
         </div>
 
         {/* Legend */}
-        <div className="flex items-center space-x-5 mt-3 text-xs" style={{ color: '#A09484' }}>
+        <div className="flex items-center space-x-5 mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: '#5A9A6A' }} />已提交</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: '#D06050' }} />未提交</span>
-          <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[#2C2C2C] text-white text-[8px] flex items-center justify-center">5</span>今天</span>
+          <span className="flex items-center gap-1.5"><span className="w-3.5 h-3.5 rounded-full bg-[var(--btn-primary)] text-white text-[8px] flex items-center justify-center">{new Date().getDate()}</span>今天</span>
         </div>
 
         {/* Selected day detail panel */}
         {selected && selected <= today && (
-          <div className="mt-5 rounded-xl overflow-hidden border transition-all duration-300 animate-in" style={{ borderColor: '#E5DDD0', background: '#FFFFFF' }}>
+          <div className="mt-5 rounded-xl overflow-hidden border transition-all duration-300 animate-in" style={{ borderColor: 'var(--border)', background: 'var(--bg-input)' }}>
             {/* Detail header */}
-            <div className="px-5 py-3 flex items-center justify-between" style={{ background: '#FAFAF7', borderBottom: '1px solid #F0EBE3' }}>
+            <div className="px-5 py-3 flex items-center justify-between" style={{ background: 'var(--bg-table-head)', borderBottom: '1px solid var(--border-light)' }}>
               <div className="flex items-center gap-2">
-                <span className="font-medium" style={{ color: '#2C2C2C' }}>{selected}</span>
+                <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{selected}</span>
                 <span className="text-xs px-2 py-0.5 rounded-full" style={{
-                  background: selectedDay?.submitted ? '#EDF7EF' : selectedDay?.is_workday ? '#FEF2F0' : '#F5F0E8',
-                  color: selectedDay?.submitted ? '#3D7A4A' : selectedDay?.is_workday ? '#C05040' : '#8B7E6A',
+                  background: selectedDay?.submitted ? '#EDF7EF' : selectedDay?.is_workday ? '#FEF2F0' : 'var(--bg-sidebar)',
+                  color: selectedDay?.submitted ? '#3D7A4A' : selectedDay?.is_workday ? '#C05040' : 'var(--text-secondary)',
                 }}>
                   {selectedDay?.holiday || (selectedDay?.is_workday ? '工作日' : '休息日')}
                   {selectedDay?.submitted ? ' · 已提交' : ' · 未提交'}
@@ -193,17 +193,17 @@ export function MyCalendar({ onSupplement }: Props): React.ReactElement {
               <button
                 onClick={() => onSupplement(selected)}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90 active:scale-95 cursor-pointer"
-                style={{ background: '#2C2C2C' }}
+                style={{ background: 'var(--btn-primary)' }}
               >
                 <Pencil size={13} />
-                {selectedDay?.submitted ? '重新填写' : '去补填'}
+                {selectedDay?.submitted ? '重新填写' : selected === today ? '去汇报' : '去补填'}
               </button>
             </div>
 
             {/* Summary content */}
             {loadingSummary && (
               <div className="px-5 py-8 flex justify-center">
-                <div className="flex items-center gap-2 text-sm" style={{ color: '#A09484' }}>
+                <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
                   <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                   加载中...
                 </div>
@@ -212,7 +212,7 @@ export function MyCalendar({ onSupplement }: Props): React.ReactElement {
 
             {!loadingSummary && daySummary?.submitted && daySummary.summary && (
               <div className="px-5 py-4 space-y-3">
-                <div className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#4B4539' }}>
+                <div className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-body)' }}>
                   {daySummary.summary}
                 </div>
                 {daySummary.risk && (
@@ -225,7 +225,7 @@ export function MyCalendar({ onSupplement }: Props): React.ReactElement {
             )}
 
             {!loadingSummary && (!daySummary || !daySummary.submitted) && (
-              <div className="px-5 py-6 text-center text-sm" style={{ color: '#A09484' }}>
+              <div className="px-5 py-6 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
                 当天暂无日报记录
               </div>
             )}

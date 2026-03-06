@@ -17,44 +17,44 @@ interface ChatInterfaceProps {
 }
 
 const mdComponents: Record<string, React.FC<any>> = {
-  h1: ({ children }) => <h2 className="font-bold text-lg mt-3 mb-1" style={{ color: '#2C2C2C' }}>{children}</h2>,
-  h2: ({ children }) => <h3 className="font-semibold text-base mt-3 mb-1" style={{ color: '#2C2C2C' }}>{children}</h3>,
-  h3: ({ children }) => <h4 className="font-semibold text-sm mt-3 mb-1" style={{ color: '#2C2C2C' }}>{children}</h4>,
+  h1: ({ children }) => <h2 className="font-bold text-lg mt-3 mb-1" style={{ color: 'var(--text-primary)' }}>{children}</h2>,
+  h2: ({ children }) => <h3 className="font-semibold text-base mt-3 mb-1" style={{ color: 'var(--text-primary)' }}>{children}</h3>,
+  h3: ({ children }) => <h4 className="font-semibold text-sm mt-3 mb-1" style={{ color: 'var(--text-primary)' }}>{children}</h4>,
   p: ({ children }) => <p className="my-1">{children}</p>,
   ul: ({ children }) => <ul className="ml-1 space-y-0.5">{children}</ul>,
   ol: ({ children }) => <ol className="ml-1 space-y-0.5 list-decimal list-inside">{children}</ol>,
   li: ({ children }) => (
     <div className="flex items-start gap-2 ml-1 my-0.5">
-      <span className="mt-1.5 text-[6px]" style={{ color: '#D4C5A9' }}>●</span>
+      <span className="mt-1.5 text-[6px]" style={{ color: 'var(--accent-dot)' }}>●</span>
       <span>{children}</span>
     </div>
   ),
-  strong: ({ children }) => <strong className="font-semibold" style={{ color: '#2C2C2C' }}>{children}</strong>,
+  strong: ({ children }) => <strong className="font-semibold" style={{ color: 'var(--text-primary)' }}>{children}</strong>,
   code: ({ className, children }: any) => {
     const isBlock = className?.includes('language-');
     return isBlock
-      ? <pre className="rounded p-2 text-xs overflow-x-auto my-2" style={{ background: '#F0EBE3' }}><code>{children}</code></pre>
-      : <code className="px-1 py-0.5 rounded text-xs" style={{ background: '#F0EBE3', color: '#6B5E4F' }}>{children}</code>;
+      ? <pre className="rounded p-2 text-xs overflow-x-auto my-2" style={{ background: 'var(--bg-accent)' }}><code>{children}</code></pre>
+      : <code className="px-1 py-0.5 rounded text-xs" style={{ background: 'var(--bg-accent)', color: 'var(--text-dim)' }}>{children}</code>;
   },
   table: ({ children }) => (
     <div className="overflow-x-auto my-2">
       <table className="min-w-full text-sm border-collapse">{children}</table>
     </div>
   ),
-  thead: ({ children }) => <thead style={{ background: '#F5F0E8' }}>{children}</thead>,
-  th: ({ children }) => <th className="px-3 py-1.5 text-left font-medium" style={{ border: '1px solid #E5DDD0', color: '#4B4539' }}>{children}</th>,
-  td: ({ children }) => <td className="px-3 py-1.5" style={{ border: '1px solid #E5DDD0', color: '#6B5E4F' }}>{children}</td>,
+  thead: ({ children }) => <thead style={{ background: 'var(--bg-sidebar)' }}>{children}</thead>,
+  th: ({ children }) => <th className="px-3 py-1.5 text-left font-medium" style={{ border: '1px solid var(--border)', color: 'var(--text-body)' }}>{children}</th>,
+  td: ({ children }) => <td className="px-3 py-1.5" style={{ border: '1px solid var(--border)', color: 'var(--text-dim)' }}>{children}</td>,
 };
 
 function MarkdownContent({ text }: { text: string }): React.ReactElement {
   return <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{text}</ReactMarkdown>;
 }
 
-const MODE_LABELS: Record<string, { icon: string; text: string; color: string }> = {
-  report:     { icon: '📝', text: '汇报', color: 'border-[#E5DDD0] text-[#6B5E4F] bg-[#F5F0E8]' },
-  supplement: { icon: '📝', text: '补报', color: 'border-[#E5DDD0] text-[#6B5E4F] bg-[#F5F0E8]' },
-  query:      { icon: '🔍', text: '查询', color: 'border-[#E5DDD0] text-[#6B5E4F] bg-[#F5F0E8]' },
-  summary:    { icon: '📊', text: '周报', color: 'bg-amber-50 text-amber-600 border-amber-200' },
+const MODE_LABELS: Record<string, { icon: string; text: string }> = {
+  report:     { icon: '📝', text: '汇报' },
+  supplement: { icon: '📝', text: '补报' },
+  query:      { icon: '🔍', text: '查询' },
+  summary:    { icon: '📊', text: '周报' },
 };
 
 function formatElapsed(ms: number): string {
@@ -116,7 +116,11 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
 
   // Calendar supplement: auto-activate supplement mode with pre-selected date
   useEffect(() => {
-    if (supplementDate) {
+    if (supplementDate === '__today__') {
+      setActiveMode('report');
+      setSelectedDate(null);
+      onSupplementConsumed?.();
+    } else if (supplementDate) {
       setActiveMode('supplement');
       setSelectedDate(supplementDate);
       onSupplementConsumed?.();
@@ -330,10 +334,10 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
         <ModeButton mode="query" label="查询团队动态" icon={Search} active={activeMode === 'query'} disabled={isLoading} onToggle={() => toggleMode('query')} />
       </div>
 
-      <div className="relative flex flex-col rounded-2xl shadow-sm transition-colors" style={{ background: '#FFFFFF', border: '1px solid #E5DDD0' }}>
+      <div className="relative flex flex-col rounded-2xl shadow-sm transition-colors" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
         {activeMode === 'supplement' && !selectedDate && (
           <div className="px-3 pt-3 flex">
-            <button type="button" onClick={() => dateInputRef.current?.showPicker()} className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors cursor-pointer" style={{ background: '#F0EBE3', color: '#6B5E4F', border: '1px solid #E5DDD0' }}>
+            <button type="button" onClick={() => dateInputRef.current?.showPicker()} className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-md transition-colors cursor-pointer" style={{ background: 'var(--bg-accent)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>
               <Calendar size={13} />
               选择补填日期
             </button>
@@ -345,10 +349,10 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
         )}
         {activeMode === 'supplement' && selectedDate && (
           <div className="px-3 pt-3 flex">
-            <div className="flex items-center text-xs font-medium px-2 py-1 rounded-md animate-fade-in" style={{ background: '#F0EBE3', color: '#6B5E4F', border: '1px solid #E5DDD0' }}>
+            <div className="flex items-center text-xs font-medium px-2 py-1 rounded-md animate-fade-in" style={{ background: 'var(--bg-accent)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>
               <Calendar size={12} className="mr-1.5" />
               <span>补填: {selectedDate}</span>
-              <button onClick={() => setSelectedDate(null)} className="ml-2 rounded p-0.5 transition-colors" style={{ color: '#8B7E6A' }}>
+              <button onClick={() => setSelectedDate(null)} className="ml-2 rounded p-0.5 transition-colors" style={{ color: 'var(--text-secondary)' }}>
                 <X size={12} />
               </button>
             </div>
@@ -363,7 +367,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
               if (e.key === 'Enter' && e.shiftKey && !(activeMode === 'supplement' && !selectedDate)) { e.preventDefault(); handleSend(); }
             }}
             placeholder={getPlaceholder()}
-            style={{ outline: 'none', boxShadow: 'none', color: '#2C2C2C' }}
+            style={{ outline: 'none', boxShadow: 'none', color: 'var(--text-primary)' }}
             className="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none resize-none py-3 px-3 min-h-[48px] max-h-32"
             rows={1}
           />
@@ -373,8 +377,8 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
             disabled={(activeMode !== 'summary' && !input.trim()) || isLoading || (activeMode === 'supplement' && !selectedDate)}
             className="p-2 m-1.5 rounded-xl transition-all flex-shrink-0"
             style={{
-              background: (input.trim() || activeMode === 'summary') && !isLoading && !(activeMode === 'supplement' && !selectedDate) ? '#2C2C2C' : '#E5DDD0',
-              color: (input.trim() || activeMode === 'summary') && !isLoading && !(activeMode === 'supplement' && !selectedDate) ? '#FFFFFF' : '#A09484',
+              background: (input.trim() || activeMode === 'summary') && !isLoading && !(activeMode === 'supplement' && !selectedDate) ? 'var(--btn-primary)' : 'var(--bg-active)',
+              color: (input.trim() || activeMode === 'summary') && !isLoading && !(activeMode === 'supplement' && !selectedDate) ? 'var(--btn-primary-text)' : 'var(--text-muted)',
               cursor: (input.trim() || activeMode === 'summary') && !isLoading && !(activeMode === 'supplement' && !selectedDate) ? 'pointer' : 'not-allowed',
             }}
           >
@@ -382,7 +386,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
           </button>
         </div>
       </div>
-      <p className="text-center text-xs mt-2" style={{ color: '#A09484' }}>AI 生成内容可能存在误差，重要信息请核对。</p>
+      <p className="text-center text-xs mt-2" style={{ color: 'var(--text-muted)' }}>AI 生成内容可能存在误差，重要信息请核对。</p>
     </>
   );
 
@@ -393,8 +397,8 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
         <div className="mb-2">
           <img src={MO_LOGO} alt="MOI" className="w-12 h-12 object-contain" />
         </div>
-        <h2 className="text-xl font-semibold mb-1" style={{ color: '#2C2C2C' }}>你好，{user.name}</h2>
-        <p className="text-sm mb-8" style={{ color: '#A09484' }}>选择功能开始，或随便聊聊</p>
+        <h2 className="text-xl font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>你好，{user.name}</h2>
+        <p className="text-sm mb-8" style={{ color: 'var(--text-muted)' }}>选择功能开始，或随便聊聊</p>
         <div className="w-full">{inputArea}</div>
       </div>
     );
@@ -412,7 +416,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
             <div key={msg.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}>
               <div className={`flex max-w-[85%] md:max-w-[70%] ${isUser ? 'flex-row-reverse space-x-reverse' : 'flex-row'} items-start space-x-3`}>
                 {!isUser && (
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: '#FFFFFF', border: '1px solid #E5DDD0' }}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
                     <img src={MO_LOGO} alt="MO" className="w-5 h-5 object-contain" />
                   </div>
                 )}
@@ -422,7 +426,8 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
                   {isUser && (() => {
                     const ml = MODE_LABELS[msg.metadata?.mode as string];
                     return ml ? (
-                      <div className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border ${ml.color}`}>
+                      <div className="inline-flex items-center text-xs px-2 py-0.5 rounded-full border"
+                        style={{ borderColor: 'var(--border)', color: 'var(--text-dim)', background: 'var(--bg-sidebar)' }}>
                         <span className="mr-1 text-[10px]">{ml.icon}</span>{ml.text}
                       </div>
                     ) : null;
@@ -430,9 +435,9 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
                   {msg.type !== 'summary_confirm' && (
                   <div className={`px-5 py-3 rounded-2xl text-base leading-relaxed shadow-sm ${
                     isUser ? 'rounded-tr-sm' : 'rounded-tl-sm'
-                  }`} style={isUser ? { background: '#EDE5D8', color: '#2C2C2C' } : { background: '#FFFCF8', border: '1px solid #E5DDD0', color: '#4B4539' }}>
+                  }`} style={isUser ? { background: 'var(--bg-bubble-user)', color: 'var(--text-primary)' } : { background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-body)' }}>
                     {msg.metadata?.supplementDate && (
-                      <div className="inline-flex items-center text-xs px-2 py-0.5 rounded mb-2" style={{ background: '#F0EBE3', color: '#6B5E4F', border: '1px solid #E5DDD0' }}>
+                      <div className="inline-flex items-center text-xs px-2 py-0.5 rounded mb-2" style={{ background: 'var(--bg-accent)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>
                         <Calendar size={10} className="mr-1" />
                         补填: {msg.metadata.supplementDate}
                       </div>
@@ -451,20 +456,20 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
                         <div className="mb-2">
                           <button
                             onClick={toggleCollapse}
-                            className="flex items-center gap-1.5 text-xs font-medium" style={{ color: '#8B7E6A' }}
+                            className="flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}
                           >
                             <Brain size={13} />
                             {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
                             思考过程 ({steps.length} 步)
                             {elapsed && elapsed > 0 && (
-                              <span className="font-normal flex items-center gap-0.5" style={{ color: '#A09484' }}>
+                              <span className="font-normal flex items-center gap-0.5" style={{ color: 'var(--text-muted)' }}>
                                 <Clock size={10} /> {formatElapsed(elapsed)}
                               </span>
                             )}
                             {isLoading && !done && !collapsed && <Loader2 size={11} className="animate-spin ml-1" />}
                           </button>
                           {!collapsed && (
-                            <div className="mt-1.5 space-y-0.5 text-xs pl-2.5" style={{ color: '#A09484', borderLeft: '2px solid #D4C5A9' }}>
+                            <div className="mt-1.5 space-y-0.5 text-xs pl-2.5" style={{ color: 'var(--text-muted)', borderLeft: '2px solid var(--accent-dot)' }}>
                               {steps.map((step, i) => (
                                 <p key={i} className="leading-relaxed">{step}</p>
                               ))}
@@ -476,7 +481,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
                     {isUser
                       ? <p className="whitespace-pre-wrap">{msg.content}</p>
                       : msg.content === '' && isLoading
-                        ? <Loader2 size={16} className="animate-spin" style={{ color: '#A09484' }} />
+                        ? <Loader2 size={16} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
                         : <MarkdownContent text={msg.content} />
                     }
                   </div>
@@ -484,12 +489,12 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
 
                   {/* Summary confirmation card */}
                   {msg.type === 'summary_confirm' && msg.metadata && (
-                    <div className="rounded-xl p-4 shadow-sm mt-2 max-w-sm ml-0 mr-auto text-left" style={{ background: '#FFFFFF', border: '1px solid #E5DDD0' }}>
-                      <h4 className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#8B7E6A' }}>
+                    <div className="rounded-xl p-4 shadow-sm mt-2 max-w-sm ml-0 mr-auto text-left" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+                      <h4 className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-secondary)' }}>
                         {msg.metadata.isSupplement ? '补交预览' : '日报预览'}
-                        {msg.metadata.supplementDate && <span className="ml-2 font-normal" style={{ color: '#A09484' }}>({msg.metadata.supplementDate})</span>}
+                        {msg.metadata.supplementDate && <span className="ml-2 font-normal" style={{ color: 'var(--text-muted)' }}>({msg.metadata.supplementDate})</span>}
                       </h4>
-                      <div className="text-sm p-3 rounded-lg mb-3 whitespace-pre-line" style={{ color: '#4B4539', background: '#F5F0E8', border: '1px solid #E5DDD0' }}>
+                      <div className="text-sm p-3 rounded-lg mb-3 whitespace-pre-line" style={{ color: 'var(--text-body)', background: 'var(--bg-sidebar)', border: '1px solid var(--border)' }}>
                         {msg.metadata.summary}
                       </div>
                       {msg.metadata.risks?.length > 0 && (
@@ -499,28 +504,28 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
                       )}
                       <div className="flex space-x-2 w-64">
                         {msg.metadata.confirmed ? (
-                          <div className="flex-1 text-center text-sm py-2" style={{ color: '#A09484' }}>已提交</div>
+                          <div className="flex-1 text-center text-sm py-2" style={{ color: 'var(--text-muted)' }}>已提交</div>
                         ) : msg.metadata.dismissed ? (
-                          <div className="flex-1 text-center text-sm py-2" style={{ color: '#A09484' }}>已取消</div>
+                          <div className="flex-1 text-center text-sm py-2" style={{ color: 'var(--text-muted)' }}>已取消</div>
                         ) : msg.metadata.edited ? (
-                          <div className="flex-1 text-center text-sm py-2" style={{ color: '#A09484' }}>已编辑</div>
+                          <div className="flex-1 text-center text-sm py-2" style={{ color: 'var(--text-muted)' }}>已编辑</div>
                         ) : (
                           <>
                             <button onClick={() => {
                               setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, metadata: { ...m.metadata, confirmed: true } } : m));
                               handleSend('确认提交');
-                            }} className="w-20 text-white text-sm py-2 rounded-lg transition-colors" style={{ background: '#2C2C2C' }}>
+                            }} className="w-20 text-white text-sm py-2 rounded-lg transition-colors" style={{ background: 'var(--btn-primary)' }}>
                               提交
                             </button>
                             <button onClick={() => {
                               setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, metadata: { ...m.metadata, edited: true } } : m));
                               handleEdit(msg.metadata.summary, msg.metadata.supplementDate);
-                            }} className="w-20 text-sm py-2 rounded-lg transition-colors" style={{ background: '#FFFFFF', border: '1px solid #E5DDD0', color: '#4B4539' }}>
+                            }} className="w-20 text-sm py-2 rounded-lg transition-colors" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-body)' }}>
                               编辑
                             </button>
                             <button onClick={() => {
                               setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, metadata: { ...m.metadata, dismissed: true } } : m));
-                            }} className="w-20 text-sm py-2 rounded-lg transition-colors" style={{ background: '#FFFFFF', border: '1px solid #E5DDD0', color: '#8B7E6A' }}>
+                            }} className="w-20 text-sm py-2 rounded-lg transition-colors" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
                               取消
                             </button>
                           </>
@@ -531,18 +536,18 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
 
                   {/* Download card */}
                   {msg.metadata?.downloadUrl && (
-                    <div className="rounded-xl p-3 shadow-sm mt-2 max-w-sm ml-0 mr-auto flex items-center cursor-pointer transition-colors group" style={{ background: '#FFFFFF', border: '1px solid #E5DDD0' }}>
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors" style={{ background: '#F0EBE3', color: '#8B7E6A' }}>
+                    <div className="rounded-xl p-3 shadow-sm mt-2 max-w-sm ml-0 mr-auto flex items-center cursor-pointer transition-colors group" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors" style={{ background: 'var(--bg-accent)', color: 'var(--text-secondary)' }}>
                         <FileDown size={20} />
                       </div>
                       <div className="ml-3 flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate" style={{ color: '#2C2C2C' }}>{msg.metadata.downloadTitle || 'Document.pdf'}</p>
-                        <p className="text-xs" style={{ color: '#8B7E6A' }}>点击下载生成的文档</p>
+                        <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{msg.metadata.downloadTitle || 'Document.pdf'}</p>
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>点击下载生成的文档</p>
                       </div>
                     </div>
                   )}
 
-                  <span className="text-xs block pt-1" style={{ color: '#D4C5A9' }}>
+                  <span className="text-xs block pt-1" style={{ color: 'var(--accent-dot)' }}>
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
@@ -554,11 +559,11 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
         {/* Loading spinner (only when no streaming message exists) */}
         {isLoading && messages[messages.length - 1]?.role !== 'assistant' && (
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden" style={{ background: '#FFFFFF', border: '1px solid #E5DDD0' }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden" style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
               <img src={MO_LOGO} alt="Loading" className="w-5 h-5 object-contain" />
             </div>
-            <div className="px-4 py-2 rounded-2xl rounded-tl-sm" style={{ background: '#F0EBE3' }}>
-              <Loader2 size={16} className="animate-spin" style={{ color: '#A09484' }} />
+            <div className="px-4 py-2 rounded-2xl rounded-tl-sm" style={{ background: 'var(--bg-accent)' }}>
+              <Loader2 size={16} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
             </div>
           </div>
         )}
@@ -566,7 +571,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
       </div>
 
       {/* Input area */}
-      <div className="p-4 border-t" style={{ background: '#FAF9F6', borderColor: '#E5DDD0' }}>
+      <div className="p-4 border-t" style={{ background: 'var(--bg-page)', borderColor: 'var(--border)' }}>
         <div className="max-w-4xl mx-auto">
           {inputArea}
         </div>
@@ -586,8 +591,8 @@ function ModeButton({ label, icon: Icon, active, disabled, onToggle }: {
       onClick={onToggle} disabled={disabled}
       className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-all shadow-sm whitespace-nowrap"
       style={active
-        ? { background: '#2C2C2C', border: '1px solid #2C2C2C', color: '#FFFFFF' }
-        : { background: '#F5F0E8', border: '1px solid #E5DDD0', color: '#6B5E4F' }
+        ? { background: 'var(--btn-primary)', border: '1px solid var(--btn-primary)', color: 'var(--btn-primary-text)' }
+        : { background: 'var(--bg-sidebar)', border: '1px solid var(--border)', color: 'var(--text-dim)' }
       }
     >
       <Icon size={12} />

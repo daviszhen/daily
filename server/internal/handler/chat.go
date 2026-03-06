@@ -68,11 +68,11 @@ func (h *ChatHandler) Chat(c *gin.Context) {
 		return
 	}
 
-	// 取今天已有总结，和本次摘要合并
+	// 取今天所有提交记录，带时间戳传给 LLM 合并
 	mergedSummary := p.Summary
-	var existing model.DailySummary
-	if err := h.daily.GetDailySummary(ctx, p.MemberID, date, &existing); err == nil && existing.Summary != "" {
-		if merged, err := h.ai.MergeDailySummary(ctx, []string{existing.Summary, p.Summary}); err == nil {
+	allEntries, _ := h.daily.GetDayEntries(ctx, p.MemberID, date)
+	if len(allEntries) > 1 {
+		if merged, err := h.ai.MergeDailySummary(ctx, allEntries); err == nil {
 			mergedSummary = merged
 		} else {
 			logger.Warn("merge summary failed, using latest", "err", err)

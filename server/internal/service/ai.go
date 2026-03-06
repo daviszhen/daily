@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"smart-daily/internal/logger"
+	"smart-daily/internal/model"
 	"sort"
 	"strconv"
 	"strings"
@@ -454,13 +455,19 @@ func (s *AIService) flushInsightBlocks(data map[string]interface{}, flush func(s
 }
 
 // MergeDailySummary 将今天所有提交记录合并成一份总结
-func (s *AIService) MergeDailySummary(ctx context.Context, entries []string) (string, error) {
-	system := `你是日报合并助手。将用户多次提交的工作记录合并为一份简洁的当日总结。
+func (s *AIService) MergeDailySummary(ctx context.Context, entries []model.DailyEntry) (string, error) {
+	system := `你是日报合并助手。将用户当天多次提交的工作记录合并为一份简洁的当日总结。
 规则：
+- 每条记录带有提交时间，按时间顺序理解
+- 如果用户明确表示"作废""不算""重新提交"等，以用户意图为准，丢弃被否定的内容
 - 如果后面的记录修正了前面的内容，以最新为准
 - 去重，合并相同事项
 - 每条以 - 开头，直接输出合并后的摘要`
-	user := "以下是今天多次提交的工作记录（按时间顺序）：\n" + strings.Join(entries, "\n---\n")
+	var parts []string
+	for _, e := range entries {
+		parts = append(parts, fmt.Sprintf("[%s] %s", e.CreatedAt.Format("15:04"), e.Content))
+	}
+	user := "以下是今天多次提交的工作记录（按时间顺序）：\n" + strings.Join(parts, "\n")
 	return s.doChatWithModel(ctx, s.fastModel, system, user, false, nil)
 }
 

@@ -379,6 +379,16 @@ func randHex(n int) string {
 
 func (s *ImportService) batchExtractTopics(entries []model.DailyEntry, members []model.Member) {
 	ctx := context.Background()
+
+	// Delete old topic_activities for these entries (idempotent re-import)
+	var entryIDs []int
+	for _, e := range entries {
+		entryIDs = append(entryIDs, e.ID)
+	}
+	if len(entryIDs) > 0 {
+		s.topicRepo.DeleteByEntryIDs(ctx, entryIDs)
+	}
+
 	existingTopics, _ := s.topicRepo.ListDistinctTopics(ctx)
 
 	nameMap := make(map[int]string)

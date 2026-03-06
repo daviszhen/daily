@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -74,10 +76,16 @@ func (c *apiClient) doList(method, path string) (int, []interface{}) {
 	return resp.StatusCode, result
 }
 
-func (c *apiClient) doRaw(method, path string) *http.Response {
+func (c *apiClient) doRaw(method, path string, body ...interface{}) *http.Response {
 	c.t.Helper()
-	req, _ := http.NewRequest(method, baseURL+path, nil)
+	var reqBody io.Reader
+	if len(body) > 0 && body[0] != nil {
+		b, _ := json.Marshal(body[0])
+		reqBody = bytes.NewReader(b)
+	}
+	req, _ := http.NewRequest(method, baseURL+path, reqBody)
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		c.t.Fatalf("%s %s failed: %v", method, path, err)
@@ -562,4 +570,193 @@ func TestAPILogs(t *testing.T) {
 		t.Fatalf("unauthenticated expected 401, got %d", resp3.StatusCode)
 	}
 	t.Log("OK: unauthenticated rejected")
+}
+
+func TestBenchmarkReportValidate(t *testing.T) {
+	benchData := loadBenchmarks(t)
+	c := newAPIClient(t)
+
+	for _, tc := range benchData.ReportValidate.Cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			start := time.Now()
+			resp := c.doRaw("POST", "/api/chat/stream", map[string]string{"text": tc.Input, "mode": "report"})
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			elapsed := time.Since(start).Seconds()
+
+			content := string(body)
+			hasConfirm := strings.Contains(content, "summary_confirm")
+
+			if tc.ExpectValid && tc.ExpectSufficient {
+				if !hasConfirm {
+					t.Errorf("expected summary_confirm for valid+sufficient input")
+				}
+			} else {
+				if hasConfirm {
+					t.Errorf("unexpected summary_confirm for invalid/insufficient input")
+				}
+			}
+
+			if elapsed > tc.MaxSeconds {
+				t.Logf("WARN: %s took %.1fs, exceeds baseline %.0fs", tc.Name, elapsed, tc.MaxSeconds)
+			}
+			t.Logf("OK: %s → %.1fs (limit %.0fs), hasConfirm=%v", tc.Name, elapsed, tc.MaxSeconds, hasConfirm)
+		})
+	}
+}
+
+func TestBenchmarkDataAsking(t *testing.T) {
+	benchData := loadBenchmarks(t)
+	c := newAPIClient(t)
+
+	for _, tc := range benchData.DataAsking.Cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			start := time.Now()
+			resp := c.doRaw("POST", "/api/chat/stream", map[string]string{"text": tc.Input, "mode": "query"})
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			elapsed := time.Since(start).Seconds()
+
+			hasAnswer := strings.Contains(string(body), "\"token\"")
+			if tc.ExpectHasAnswer && !hasAnswer {
+				t.Errorf("expected answer tokens but got none")
+			}
+
+			if elapsed > tc.MaxSeconds {
+				t.Logf("WARN: %s took %.1fs, exceeds baseline %.0fs", tc.Name, elapsed, tc.MaxSeconds)
+			}
+			t.Logf("OK: %s → %.1fs (limit %.0fs), hasAnswer=%v", tc.Name, elapsed, tc.MaxSeconds, hasAnswer)
+		})
+	}
+}
+
+func TestBenchmarkMergeSummary(t *testing.T) {
+	benchData := loadBenchmarks(t)
+	c := newAPIClient(t)
+
+	for _, tc := range benchData.MergeSummary.Cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			// Submit each entry through stream → confirm flow (supplement mode with specific date)
+			for i, entry := range tc.Entries {
+				start := time.Now()
+				resp := c.doRaw("POST", "/api/chat/stream", map[string]string{"text": entry, "mode": "supplement", "date": tc.Date})
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+
+				if !strings.Contains(string(body), "summary_confirm") {
+					t.Fatalf("entry %d did not get confirm card: %s", i, string(body)[:min(len(body), 200)])
+				}
+				// Confirm
+				code, result := c.do("POST", "/api/chat", map[string]string{"action": "confirm"})
+				if code != 200 {
+					t.Fatalf("confirm entry %d failed: %d %v", i, code, result)
+				}
+				t.Logf("entry %d submitted in %.1fs", i, time.Since(start).Seconds())
+			}
+
+			// Check merged summary via calendar/day
+			resp := c.doRaw("GET", "/api/calendar/day?date="+tc.Date)
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			summary := string(body)
+
+			for _, kw := range tc.ExpectContains {
+				if !strings.Contains(summary, kw) {
+					t.Errorf("merged summary missing expected keyword %q\nsummary: %s", kw, summary)
+				}
+			}
+			for _, kw := range tc.ExpectNotContains {
+				if strings.Contains(summary, kw) {
+					t.Errorf("merged summary should NOT contain %q (was supposed to be discarded)\nsummary: %s", kw, summary)
+				}
+			}
+			t.Logf("OK: %s → %s", tc.Name, summary[:min(len(summary), 200)])
+		})
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// --- benchmark helpers ---
+
+type benchmarks struct {
+	ReportValidate struct {
+		Cases []struct {
+			Name             string  `json:"name"`
+			Input            string  `json:"input"`
+			ExpectValid      bool    `json:"expect_valid"`
+			ExpectSufficient bool    `json:"expect_sufficient"`
+			MaxSeconds       float64 `json:"max_seconds"`
+		} `json:"cases"`
+	} `json:"report_validate"`
+	DataAsking struct {
+		Cases []struct {
+			Name            string  `json:"name"`
+			Input           string  `json:"input"`
+			ExpectHasAnswer bool    `json:"expect_has_answer"`
+			MaxSeconds      float64 `json:"max_seconds"`
+		} `json:"cases"`
+	} `json:"data_asking"`
+	MergeSummary struct {
+		Cases []struct {
+			Name              string   `json:"name"`
+			Date              string   `json:"date"`
+			Entries           []string `json:"entries"`
+			ExpectContains    []string `json:"expect_contains"`
+			ExpectNotContains []string `json:"expect_not_contains"`
+			MaxSeconds        float64  `json:"max_seconds"`
+		} `json:"cases"`
+	} `json:"merge_summary"`
+}
+
+func loadBenchmarks(t *testing.T) benchmarks {
+	t.Helper()
+	data, err := os.ReadFile("benchmarks.json")
+	if err != nil {
+		t.Fatalf("load benchmarks.json: %v", err)
+	}
+	var b benchmarks
+	if err := json.Unmarshal(data, &b); err != nil {
+		t.Fatalf("parse benchmarks.json: %v", err)
+	}
+	return b
+}
+
+func TestFeedback(t *testing.T) {
+	c := newAPIClient(t)
+
+	// Submit
+	code, fb := c.do("POST", "/api/feedback", map[string]string{"content": "测试反馈意见"})
+	if code != 200 {
+		t.Fatalf("submit failed: %d", code)
+	}
+	fbID := int(fb["id"].(float64))
+	t.Log("OK: feedback submitted")
+
+	// List
+	code2, list := c.doList("GET", "/api/feedback")
+	if code2 != 200 || len(list) == 0 {
+		t.Fatal("feedback list empty")
+	}
+	t.Logf("OK: feedback list has %d items", len(list))
+
+	// Close (admin)
+	code3, _ := c.do("PUT", fmt.Sprintf("/api/feedback/%d/close", fbID), nil)
+	if code3 != 200 {
+		t.Fatalf("close failed: %d", code3)
+	}
+	t.Log("OK: feedback closed")
+
+	// Delete (admin)
+	resp4 := c.doRaw("DELETE", fmt.Sprintf("/api/feedback/%d", fbID))
+	defer resp4.Body.Close()
+	if resp4.StatusCode != 200 {
+		t.Fatalf("delete failed: %d", resp4.StatusCode)
+	}
+	t.Log("OK: feedback deleted")
 }
