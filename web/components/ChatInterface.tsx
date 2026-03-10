@@ -78,6 +78,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
   const activeSessionRef = useRef<number | null>(sessionId);
   const msgCacheRef = useRef<Map<number | null, Message[]>>(new Map());
   const justCreatedRef = useRef(false);
+  const streamingRef = useRef<{ sid: number | null, startTime: number } | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([{
     id: 'welcome', role: 'assistant',
@@ -149,7 +150,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
 
     if (!sessionId) {
       if (!supplementDate) setActiveMode(null);
-      setIsLoading(false);
+      if (!streamingRef.current) setIsLoading(false);
       setMessages([{
         id: 'welcome', role: 'assistant',
         content: `你好，${user.name}。我是你的 AI 日报助手。请选择下方的功能按钮。`,
@@ -162,7 +163,19 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
     const cached = msgCacheRef.current.get(sessionId);
     if (cached && cached.length > 0) {
       setMessages(cached);
-      return; // 有缓存就不从 API 加载，避免覆盖进行中的流
+      // Restore streaming state if this session has active stream
+      if (streamingRef.current?.sid === sessionId) {
+        setIsLoading(true);
+        setThinkingStartTime(streamingRef.current.startTime);
+        setThinkingElapsed(Date.now() - streamingRef.current.startTime);
+      }
+      // Restore thinking state from last message
+      const last = cached[cached.length - 1];
+      if (last?.metadata?.thinkingSteps?.length > 0 && !last.metadata.thinkingDone) {
+        setThinkingSteps(last.metadata.thinkingSteps);
+        setThinkingElapsed(last.metadata.thinkingElapsed || 0);
+      }
+      return;
     }
 
     // 缓存没有，从 API 加载
@@ -232,16 +245,27 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
       const streamId = (Date.now() + 1).toString();
       setMessages(prev => [...prev, { id: streamId, role: 'assistant', content: '', type: 'text', timestamp: new Date(), metadata: { mode: activeMode || undefined } }]);
       setThinkingSteps([]);
-      setThinkingStartTime(null);
+      setThinkingStartTime(activeMode === 'query' ? Date.now() : null);
       setThinkingElapsed(0);
 
       const thinkStart = Date.now();
+      streamingRef.current = { sid: sendSessionId, startTime: thinkStart };
+      // Helper: update stream message in state (if active) or cache (if away)
+      const updateMsg = (fn: (m: Message) => Message) => {
+        if (isActive()) {
+          setMessages(prev => {
+            const next = prev.map(m => m.id === streamId ? fn(m) : m);
+            if (sendSessionId) msgCacheRef.current.set(sendSessionId, next);
+            return next;
+          });
+        } else if (sendSessionId) {
+          const cached = msgCacheRef.current.get(sendSessionId) || [];
+          msgCacheRef.current.set(sendSessionId, cached.map(m => m.id === streamId ? fn(m) : m));
+        }
+      };
       const response = await processUserMessage(sendText, messages, { mode: activeMode, date: selectedDate, sessionId: sid }, {
         onToken(token) {
-          if (!isActive()) return;
-          // 收到正文 token 后折叠思考过程
-          setMessages(prev => prev.map(m => m.id === streamId
-            ? { ...m, content: m.content + token, metadata: { ...m.metadata, thinkingCollapsed: true } } : m));
+          updateMsg(m => ({ ...m, content: m.content + token, metadata: { ...m.metadata, thinkingCollapsed: true } }));
         },
         onResult(data) {
           if (!isActive()) return;
@@ -250,20 +274,19 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
             : m));
         },
         onThinking(step) {
-          if (!isActive()) return;
-          setThinkingStartTime(prev => prev ?? Date.now());
-          setThinkingSteps(prev => [...prev, step]);
-          // 思考中默认展开（thinkingCollapsed: false）
-          setMessages(prev => prev.map(m => {
-            if (m.id !== streamId) return m;
+          if (isActive()) {
+            setThinkingStartTime(prev => prev ?? Date.now());
+            setThinkingSteps(prev => [...prev, step]);
+          }
+          updateMsg(m => {
             const steps = [...(m.metadata?.thinkingSteps || []), step];
             return { ...m, metadata: { ...m.metadata, thinkingSteps: steps, thinkingCollapsed: false, thinkingElapsed: Date.now() - thinkStart } };
-          }));
+          });
         },
         onModeSwitch(mode) {
           if (!isActive()) return;
           setActiveMode(mode as ChatMode);
-          setMessages(prev => prev.map(m => m.id === streamId ? { ...m, metadata: { ...m.metadata, mode } } : m));
+          updateMsg(m => ({ ...m, metadata: { ...m.metadata, mode } }));
         },
       });
 
@@ -274,6 +297,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
     } catch (error: any) {
       console.error(error);
     } finally {
+      streamingRef.current = null;
       // 流完成后同步缓存（不管是否当前 session，确保切回来能看到）
       if (sendSessionId) {
         setMessages(prev => { msgCacheRef.current.set(sendSessionId, prev); return prev; });
@@ -445,7 +469,23 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
                     {/* Thinking steps (query mode) - above answer */}
                     {(() => {
                       const steps = msg.metadata?.thinkingSteps as string[] | undefined;
-                      if (!steps?.length) return null;
+                      // Show timer even before first thinking step arrives
+                      if (!steps?.length) {
+                        if (isLoading && msg.content === '' && thinkingStartTime) {
+                          return (
+                            <div className="mb-2 flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                              <Brain size={13} />
+                              思考中
+                              {thinkingElapsed > 0 && (
+                                <span className="font-normal flex items-center gap-0.5" style={{ color: 'var(--text-muted)' }}>
+                                  <Clock size={10} /> {formatElapsed(thinkingElapsed)}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      }
                       const done = msg.metadata?.thinkingDone as boolean | undefined;
                       const elapsed = (isLoading && !done) ? thinkingElapsed : msg.metadata?.thinkingElapsed as number | undefined;
                       const collapsed = msg.metadata?.thinkingCollapsed !== false; // 默认折叠
@@ -466,7 +506,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
                                 <Clock size={10} /> {formatElapsed(elapsed)}
                               </span>
                             )}
-                            {isLoading && !done && !collapsed && <Loader2 size={11} className="animate-spin ml-1" />}
+                            {isLoading && !done && <span className="ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>进行中</span>}
                           </button>
                           {!collapsed && (
                             <div className="mt-1.5 space-y-0.5 text-xs pl-2.5" style={{ color: 'var(--text-muted)', borderLeft: '2px solid var(--accent-dot)' }}>

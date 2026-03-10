@@ -265,7 +265,8 @@ func (s *AIService) AssessCompleteness(ctx context.Context, content string) (suf
 func (s *AIService) StreamSummarize(ctx context.Context, content string, flush func(string)) (string, error) {
 	system := `你是日报摘要助手。用简洁要点总结用户的工作内容。规则：
 - 每条以 - 开头，每条独占一行
-- 同一件事的描述和补充信息合并为一条，不要拆分
+- 不同项目/模块/主题的工作必须分开为独立条目
+- 仅当描述的是同一件具体事情时才合并
 - 直接输出摘要文本，不要加标题或额外说明`
 	result, err := s.stream(ctx, system, content, flush)
 	if err != nil {

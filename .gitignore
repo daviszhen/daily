@@ -50,3 +50,6 @@ docs/*.docx
 # Exports
 exports/
 kiro对话-daily
+
+# Real config with credentials — never commit
+server/etc/config-dev.yaml
