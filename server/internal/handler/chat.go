@@ -210,19 +210,6 @@ func (h *ChatHandler) streamReportCapture(ctx context.Context, sse *sseWriter, u
 		return reply, ""
 	}
 
-	// 充分性检查（对提取后的内容判断）
-	sufficient, followUp, err := h.ai.AssessCompleteness(ctx, extracted)
-	if err != nil {
-		logger.Warn("assess fallback", "err", err)
-		sufficient = true
-	}
-	logger.Info("chat.report.assess", "extracted", extracted, "sufficient", sufficient)
-	if !sufficient && followUp != "" {
-		sse.token(followUp)
-		sse.done()
-		return followUp, ""
-	}
-
 	summary, err := h.ai.StreamSummarize(ctx, extracted, sse.token)
 	if err != nil {
 		logger.Error("stream summarize failed", "err", err)

@@ -148,7 +148,7 @@ export function ChatInterface({ user, onReportSubmitted, sessionId, onSessionCre
     }
 
     if (!sessionId) {
-      setActiveMode(null);
+      if (!supplementDate) setActiveMode(null);
       setIsLoading(false);
       setMessages([{
         id: 'welcome', role: 'assistant',
