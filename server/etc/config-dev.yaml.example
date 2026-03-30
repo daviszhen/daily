@@ -13,7 +13,7 @@ log:
 
 # MOI 平台
 moi:
-  base_url: "https://freetier-01.cn-hangzhou.cluster.cn-dev.matrixone.tech"
+  base_url: "https://freetier-01.cn-hangzhou.cluster.matrixonecloud.cn"
   api_key: "YOUR_API_KEY"
   catalog_id: 1              # Catalog 目录 ID（"默认" = 1）
   model: "qwen3-max"         # 主模型（可选：qwen-turbo/qwen-plus/qwen3-max）
@@ -21,7 +21,7 @@ moi:
 
 # MatrixOne 数据库
 database:
-  host: "freetier-01.cn-hangzhou.cluster.cn-dev.matrixone.tech"
+  host: "freetier-01.cn-hangzhou.cluster.matrixonecloud.cn"
   port: 6001
   user: "YOUR_USER"
   password: "YOUR_PASSWORD"
